@@ -1,0 +1,31 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+
+            "includePath": [
+                "${workspaceFolder}/common/include",
+                "${workspaceFolder}/common/include/protocol",
+
+                "${workspaceFolder}/client/include",
+                "${workspaceFolder}/server/include",
+
+                "/usr/include",
+                "/usr/local/include"
+            ],
+
+            "defines": [],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}

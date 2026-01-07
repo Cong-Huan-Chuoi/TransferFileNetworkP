@@ -1,0 +1,65 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-server",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=gnu++17",
+                "-Wall",
+                "-Wextra",
+                "-g",
+
+                "server/src/*.cpp",
+                "common/src/*.cpp",
+
+                "-Icommon/include",
+                "-Iserver/include",
+
+                "-o",
+                "server/server"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Build backend server"
+        },
+
+        {
+            "label": "build-client",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=gnu++17",
+                "-Wall",
+                "-Wextra",
+                "-g",
+
+                "client/src/*.cpp",
+                "common/src/*.cpp",
+
+                "-Icommon/include",
+                "-Iclient/include",
+
+                "-o",
+                "client/client"
+            ],
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "detail": "Build frontend client"
+        },
+
+        {
+            "label": "build-all",
+            "dependsOn": [
+                "build-server",
+                "build-client"
+            ],
+            "group": "build",
+            "detail": "Build both server and client"
+        }
+    ]
+}
