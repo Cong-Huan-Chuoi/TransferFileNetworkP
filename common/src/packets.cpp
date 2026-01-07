@@ -5,30 +5,26 @@
 std::vector<uint8_t> make_packet(
     PacketType type,
     uint16_t flags,
-    uint32_t sequence,
+    uint32_t seq,
     const std::vector<uint8_t>& payload
 ) {
-    PacketHeader header{};
-    header.type = type;
-    header.flags = flags;
-    header.sequence = sequence;
-    header.payload_size = payload.size();
-    header.checksum = payload.empty()
+    PacketHeader h{};
+    h.type = type;
+    h.flags = flags;
+    h.seq = seq;
+    h.payload_len = payload.size();
+    h.checksum = payload.empty()
         ? 0
         : simple_checksum(payload.data(), payload.size());
 
-    std::vector<uint8_t> packet(sizeof(PacketHeader) + payload.size());
-    std::memcpy(packet.data(), &header, sizeof(PacketHeader));
+    std::vector<uint8_t> pkt(sizeof(PacketHeader) + payload.size());
+    std::memcpy(pkt.data(), &h, sizeof(PacketHeader));
 
     if (!payload.empty()) {
-        std::memcpy(
-            packet.data() + sizeof(PacketHeader),
-            payload.data(),
-            payload.size()
-        );
+        std::memcpy(pkt.data() + sizeof(PacketHeader),
+                    payload.data(), payload.size());
     }
-
-    return packet;
+    return pkt;
 }
 
 bool try_parse_packet(
@@ -36,27 +32,24 @@ bool try_parse_packet(
     PacketHeader& header,
     std::vector<uint8_t>& payload
 ) {
-    if (buffer.size() < sizeof(PacketHeader))
+    if (!buffer.can_read(sizeof(PacketHeader)))
         return false;
 
-    // Read header
     if (!buffer.read(&header, sizeof(PacketHeader)))
         return false;
 
-    // Not enough payload yet
-    if (buffer.size() < header.payload_size)
+    if (!buffer.can_read(header.payload_len))
         return false;
 
-    payload.resize(header.payload_size);
-    if (header.payload_size > 0) {
-        buffer.read(payload.data(), header.payload_size);
-    }
+    payload.resize(header.payload_len);
+    if (header.payload_len > 0)
+        buffer.read(payload.data(), header.payload_len);
 
-    // Verify checksum
-    uint32_t cs = payload.empty()
+    uint64_t cs = payload.empty()
         ? 0
         : simple_checksum(payload.data(), payload.size());
 
     return cs == header.checksum;
 }
+
 

@@ -1,23 +1,22 @@
 #pragma once
-#include<cstdint>
+#include <cstdint>
 #include "packet_types.h"
 
-// PacketHeader 16 bytes:  type (2B)│ flags (2B)│ seq (4B)│ payload (4B)│ checksum (4B)
-
-
+/*
+ * PacketHeader (20 bytes)
+ *
+ * | type(2) | flags(2) | seq(4) | payload_len(4) | checksum(8) |
+ */
 #pragma pack(push, 1)
-
-struct PacketHeader{
-    PacketType type; 
-    uint16_t flags;
-    uint32_t sequence;
-    uint32_t payload_size;
-    uint32_t checksum;
+struct PacketHeader {
+    PacketType type;        // 2 bytes
+    uint16_t   flags;       // 2 bytes
+    uint32_t   seq;         // chunk sequence
+    uint32_t   payload_len;// payload size
+    uint64_t   checksum;   // checksum payload
 };
-
 #pragma pack(pop)
 
-/* Flags */
-constexpr uint16_t FLAG_NONE       = 0x0000;
-constexpr uint16_t FLAG_LAST_CHUNK = 0x0001;
-constexpr uint16_t FLAG_ERROR      = 0x0002;
+constexpr uint16_t FLAG_NONE = 0;
+constexpr uint16_t FLAG_LAST = 1 << 0;
+constexpr uint16_t FLAG_ERR  = 1 << 1;

@@ -3,30 +3,25 @@
 #include <cstdint>
 #include <cstring>
 
-/*
- * ByteBuffer:
- * - Gom dữ liệu recv() từ TCP stream
- * - Chỉ đọc khi đủ byte
- */
+class ByteBuffer {
+public:
+    void append(const uint8_t* data, size_t len) {
+        buf.insert(buf.end(), data, data + len);
+    }
 
- class ByteBuffer{
-    private:
-        std::vector<uint8_t> buffer;
-    public:
-        void append(const uint8_t* data, size_t len){
-            buffer.insert(buffer.end(), data, data + len);
-        }
+    bool can_read(size_t len) const {
+        return buf.size() >= len;
+    }
 
-        bool read(void* out, size_t len){
-            if(buffer.size() < len) 
-                return false;
-            std::memcpy(out, buffer.data(), len);
-            buffer.erase(buffer.begin(), buffer.begin() + len);
-            return true;
-        }
+    bool read(void* out, size_t len) {
+        if (!can_read(len)) return false;
+        std::memcpy(out, buf.data(), len);
+        buf.erase(buf.begin(), buf.begin() + len);
+        return true;
+    }
 
-        size_t size() const{
-            return buffer.size();
-        }
+    size_t size() const { return buf.size(); }
 
- };
+private:
+    std::vector<uint8_t> buf;
+};
