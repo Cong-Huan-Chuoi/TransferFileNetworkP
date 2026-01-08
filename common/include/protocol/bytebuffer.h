@@ -22,6 +22,12 @@ public:
 
     size_t size() const { return buf.size(); }
 
+    bool peek(void* out, size_t len) const {
+    if (buf.size() < len) return false;
+    std::memcpy(out, buf.data(), len);
+    return true;
+    }
+
 private:
     std::vector<uint8_t> buf;
 };
