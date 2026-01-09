@@ -170,13 +170,13 @@ CMakeFiles/server.dir/server/src/Server.cpp.o: \
  /mnt/f/download\ all/TransferFileNetworkP/common/include/protocol/packet_header.h \
  /mnt/f/download\ all/TransferFileNetworkP/common/include/protocol/packet_types.h \
  /mnt/f/download\ all/TransferFileNetworkP/server/include/server/AuthManager.h \
+ /mnt/f/download\ all/TransferFileNetworkP/server/include/server/GroupManager.h \
  /usr/include/c++/13/mutex /usr/include/c++/13/bits/chrono.h \
  /usr/include/c++/13/ratio /usr/include/c++/13/limits \
  /usr/include/c++/13/ctime /usr/include/c++/13/bits/parse_numbers.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h \
  /usr/include/c++/13/bits/std_mutex.h \
  /usr/include/c++/13/bits/unique_lock.h \
- /mnt/f/download\ all/TransferFileNetworkP/server/include/server/GroupManager.h \
  /mnt/f/download\ all/TransferFileNetworkP/server/include/server/PermissionChecker.h \
  /mnt/f/download\ all/TransferFileNetworkP/server/include/server/FileSystemManager.h \
  /mnt/f/download\ all/TransferFileNetworkP/server/include/server/Logger.h \
@@ -229,4 +229,5 @@ CMakeFiles/server.dir/server/src/Server.cpp.o: \
  /usr/include/c++/13/bits/algorithmfwd.h \
  /usr/include/c++/13/bits/stl_heap.h \
  /usr/include/c++/13/bits/uniform_int_dist.h \
- /usr/include/c++/13/pstl/glue_algorithm_defs.h
+ /usr/include/c++/13/pstl/glue_algorithm_defs.h \
+ /mnt/f/download\ all/TransferFileNetworkP/server/include/server/DataPaths.h

@@ -1,28 +1,25 @@
 #pragma once
 #include <string>
-#include <mutex>
+#include <unordered_map>
 
 enum class AuthResult {
     SUCCESS,
     USER_EXISTS,
-    USER_NOT_FOUND,
-    WRONG_PASSWORD,
-    FILE_ERROR
+    INVALID_CREDENTIALS
 };
 
 class AuthManager {
 public:
-    explicit AuthManager(const std::string& userDbPath);
+    explicit AuthManager(const std::string& file);
 
-    AuthResult registerUser(const std::string& username,
-                            const std::string& password);
-
-    AuthResult verifyLogin(const std::string& username,
-                           const std::string& password);
+    AuthResult registerUser(const std::string& user,
+                            const std::string& pass);
+    AuthResult verifyLogin(const std::string& user,
+                           const std::string& pass);
 
 private:
-    std::string dbPath;
-    std::mutex dbMutex;
+    std::string dbFile;
+    std::unordered_map<std::string, std::string> users;
 
-    bool userExists(const std::string& username);
+    void saveToFile();
 };

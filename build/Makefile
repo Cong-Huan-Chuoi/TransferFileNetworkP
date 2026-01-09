@@ -347,6 +347,30 @@ server/src/ClientSession.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/server/src/ClientSession.cpp.s
 .PHONY : server/src/ClientSession.cpp.s
 
+server/src/DataPaths.o: server/src/DataPaths.cpp.o
+.PHONY : server/src/DataPaths.o
+
+# target to build an object file
+server/src/DataPaths.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/server/src/DataPaths.cpp.o
+.PHONY : server/src/DataPaths.cpp.o
+
+server/src/DataPaths.i: server/src/DataPaths.cpp.i
+.PHONY : server/src/DataPaths.i
+
+# target to preprocess a source file
+server/src/DataPaths.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/server/src/DataPaths.cpp.i
+.PHONY : server/src/DataPaths.cpp.i
+
+server/src/DataPaths.s: server/src/DataPaths.cpp.s
+.PHONY : server/src/DataPaths.s
+
+# target to generate assembly for a file
+server/src/DataPaths.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/server/src/DataPaths.cpp.s
+.PHONY : server/src/DataPaths.cpp.s
+
 server/src/FileSystemManager.o: server/src/FileSystemManager.cpp.o
 .PHONY : server/src/FileSystemManager.o
 
@@ -550,6 +574,9 @@ help:
 	@echo "... server/src/ClientSession.o"
 	@echo "... server/src/ClientSession.i"
 	@echo "... server/src/ClientSession.s"
+	@echo "... server/src/DataPaths.o"
+	@echo "... server/src/DataPaths.i"
+	@echo "... server/src/DataPaths.s"
 	@echo "... server/src/FileSystemManager.o"
 	@echo "... server/src/FileSystemManager.i"
 	@echo "... server/src/FileSystemManager.s"

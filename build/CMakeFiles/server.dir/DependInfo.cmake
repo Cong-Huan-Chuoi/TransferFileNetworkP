@@ -10,6 +10,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/mnt/f/download all/TransferFileNetworkP/server/src/AuthManager.cpp" "CMakeFiles/server.dir/server/src/AuthManager.cpp.o" "gcc" "CMakeFiles/server.dir/server/src/AuthManager.cpp.o.d"
   "/mnt/f/download all/TransferFileNetworkP/server/src/ClientSession.cpp" "CMakeFiles/server.dir/server/src/ClientSession.cpp.o" "gcc" "CMakeFiles/server.dir/server/src/ClientSession.cpp.o.d"
+  "/mnt/f/download all/TransferFileNetworkP/server/src/DataPaths.cpp" "CMakeFiles/server.dir/server/src/DataPaths.cpp.o" "gcc" "CMakeFiles/server.dir/server/src/DataPaths.cpp.o.d"
   "/mnt/f/download all/TransferFileNetworkP/server/src/FileSystemManager.cpp" "CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o" "gcc" "CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o.d"
   "/mnt/f/download all/TransferFileNetworkP/server/src/GroupManager.cpp" "CMakeFiles/server.dir/server/src/GroupManager.cpp.o" "gcc" "CMakeFiles/server.dir/server/src/GroupManager.cpp.o.d"
   "/mnt/f/download all/TransferFileNetworkP/server/src/Logger.cpp" "CMakeFiles/server.dir/server/src/Logger.cpp.o" "gcc" "CMakeFiles/server.dir/server/src/Logger.cpp.o.d"

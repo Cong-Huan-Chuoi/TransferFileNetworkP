@@ -18,12 +18,14 @@
 #include <iostream>
 #include <algorithm>
 
+#include "server/DataPaths.h"
+
 // ================== GLOBAL MANAGERS ==================
 
-static AuthManager authManager("data/users.db");
-static GroupManager groupManager("data/groups.db");
+static AuthManager authManager(DataPaths::usersDb());
+static GroupManager groupManager(DataPaths::groupsDb());
 static PermissionChecker permissionChecker(groupManager);
-static FileSystemManager fsManager("data/groups");
+static FileSystemManager fsManager(DataPaths::groupsDir());
 static Logger logger("data/server.log");
 
 // ================== UTILS ==================
@@ -161,30 +163,27 @@ void Server::dispatchPacket(ClientSession& session) {
 
     // ===== AUTH =====
     if (type == PacketType::AUTH_REGISTER_REQ) {
-        RegisterRequest req;
-        req.deserialize(buf);
+    RegisterRequest req;
+    req.deserialize(buf);
 
-        AuthResult res =
-            authManager.registerUser(req.username, req.password);
-
-        logger.log("REGISTER " + req.username);
-        return;
-    }
+    authManager.registerUser(req.username, req.password);
+    return;
+}
 
     if (type == PacketType::AUTH_LOGIN_REQ) {
-        LoginRequest req;
-        req.deserialize(buf);
+    LoginRequest req;
+    req.deserialize(buf);
 
-        AuthResult res =
-            authManager.verifyLogin(req.username, req.password);
+    AuthResult res =
+        authManager.verifyLogin(req.username, req.password);
 
-        if (res == AuthResult::SUCCESS) {
-            session.logged_in = true;
-            session.username = req.username;
-            logger.log("LOGIN " + req.username);
-        }
-        return;
+    if (res == AuthResult::SUCCESS) {
+        session.logged_in = true;
+        session.username = req.username;
     }
+    return;
+}
+
 
     // ===== REQUIRE LOGIN =====
     if (!session.logged_in) {

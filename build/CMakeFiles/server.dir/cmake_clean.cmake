@@ -3,6 +3,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/server.dir/server/src/AuthManager.cpp.o.d"
   "CMakeFiles/server.dir/server/src/ClientSession.cpp.o"
   "CMakeFiles/server.dir/server/src/ClientSession.cpp.o.d"
+  "CMakeFiles/server.dir/server/src/DataPaths.cpp.o"
+  "CMakeFiles/server.dir/server/src/DataPaths.cpp.o.d"
   "CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o"
   "CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o.d"
   "CMakeFiles/server.dir/server/src/GroupManager.cpp.o"

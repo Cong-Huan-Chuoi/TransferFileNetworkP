@@ -1,61 +1,43 @@
 #include "server/AuthManager.h"
 #include <fstream>
-#include <sstream>
+#include <filesystem>
 
-AuthManager::AuthManager(const std::string& userDbPath)
-    : dbPath(userDbPath) {}
+AuthManager::AuthManager(const std::string& file)
+    : dbFile(file) {
 
-bool AuthManager::userExists(const std::string& username) {
-    std::ifstream in(dbPath);
-    if (!in.is_open()) return false;
-
+    std::ifstream in(file);
     std::string line;
     while (std::getline(in, line)) {
-        std::istringstream iss(line);
-        std::string user;
-        if (std::getline(iss, user, '|')) {
-            if (user == username) return true;
-        }
+        auto pos = line.find('|');
+        if (pos == std::string::npos) continue;
+
+        users[line.substr(0, pos)] = line.substr(pos + 1);
     }
-    return false;
 }
 
-AuthResult AuthManager::registerUser(const std::string& username,
-                                     const std::string& password) {
-    std::lock_guard<std::mutex> lock(dbMutex);
+void AuthManager::saveToFile() {
+    std::filesystem::create_directories(
+        std::filesystem::path(dbFile).parent_path()
+    );
 
-    if (userExists(username))
+    std::ofstream out(dbFile, std::ios::trunc);
+    for (auto& [u, p] : users) {
+        out << u << "|" << p << "\n";
+    }
+}
+AuthResult AuthManager::registerUser(const std::string& user,
+                                     const std::string& pass) {
+    if (users.count(user))
         return AuthResult::USER_EXISTS;
 
-    std::ofstream out(dbPath, std::ios::app);
-    if (!out.is_open())
-        return AuthResult::FILE_ERROR;
-
-    out << username << "|" << password << "\n";
+    users[user] = pass;
+    saveToFile();              // 🔥 ghi file thật
     return AuthResult::SUCCESS;
 }
 
-AuthResult AuthManager::verifyLogin(const std::string& username,
-                                    const std::string& password) {
-    std::lock_guard<std::mutex> lock(dbMutex);
-
-    std::ifstream in(dbPath);
-    if (!in.is_open())
-        return AuthResult::FILE_ERROR;
-
-    std::string line;
-    while (std::getline(in, line)) {
-        std::istringstream iss(line);
-        std::string user, pass;
-        if (std::getline(iss, user, '|') &&
-            std::getline(iss, pass)) {
-            if (user == username) {
-                if (pass == password)
-                    return AuthResult::SUCCESS;
-                else
-                    return AuthResult::WRONG_PASSWORD;
-            }
-        }
-    }
-    return AuthResult::USER_NOT_FOUND;
+AuthResult AuthManager::verifyLogin(const std::string& user,
+                                    const std::string& pass) {
+    if (!users.count(user)) return AuthResult::INVALID_CREDENTIALS;
+    if (users[user] != pass) return AuthResult::INVALID_CREDENTIALS;
+    return AuthResult::SUCCESS;
 }

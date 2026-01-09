@@ -97,10 +97,24 @@ CMakeFiles/server.dir/server/src/ClientSession.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/server.dir/server/src/ClientSession.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/mnt/f/download all/TransferFileNetworkP/server/src/ClientSession.cpp" -o CMakeFiles/server.dir/server/src/ClientSession.cpp.s
 
+CMakeFiles/server.dir/server/src/DataPaths.cpp.o: CMakeFiles/server.dir/flags.make
+CMakeFiles/server.dir/server/src/DataPaths.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/DataPaths.cpp
+CMakeFiles/server.dir/server/src/DataPaths.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/server.dir/server/src/DataPaths.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/DataPaths.cpp.o -MF CMakeFiles/server.dir/server/src/DataPaths.cpp.o.d -o CMakeFiles/server.dir/server/src/DataPaths.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/DataPaths.cpp"
+
+CMakeFiles/server.dir/server/src/DataPaths.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/server.dir/server/src/DataPaths.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/mnt/f/download all/TransferFileNetworkP/server/src/DataPaths.cpp" > CMakeFiles/server.dir/server/src/DataPaths.cpp.i
+
+CMakeFiles/server.dir/server/src/DataPaths.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/server.dir/server/src/DataPaths.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/mnt/f/download all/TransferFileNetworkP/server/src/DataPaths.cpp" -o CMakeFiles/server.dir/server/src/DataPaths.cpp.s
+
 CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o: CMakeFiles/server.dir/flags.make
 CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/FileSystemManager.cpp
 CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o -MF CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o.d -o CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/FileSystemManager.cpp"
 
 CMakeFiles/server.dir/server/src/FileSystemManager.cpp.i: cmake_force
@@ -114,7 +128,7 @@ CMakeFiles/server.dir/server/src/FileSystemManager.cpp.s: cmake_force
 CMakeFiles/server.dir/server/src/GroupManager.cpp.o: CMakeFiles/server.dir/flags.make
 CMakeFiles/server.dir/server/src/GroupManager.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/GroupManager.cpp
 CMakeFiles/server.dir/server/src/GroupManager.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/server.dir/server/src/GroupManager.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/server.dir/server/src/GroupManager.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/GroupManager.cpp.o -MF CMakeFiles/server.dir/server/src/GroupManager.cpp.o.d -o CMakeFiles/server.dir/server/src/GroupManager.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/GroupManager.cpp"
 
 CMakeFiles/server.dir/server/src/GroupManager.cpp.i: cmake_force
@@ -128,7 +142,7 @@ CMakeFiles/server.dir/server/src/GroupManager.cpp.s: cmake_force
 CMakeFiles/server.dir/server/src/Logger.cpp.o: CMakeFiles/server.dir/flags.make
 CMakeFiles/server.dir/server/src/Logger.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/Logger.cpp
 CMakeFiles/server.dir/server/src/Logger.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/server.dir/server/src/Logger.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/server.dir/server/src/Logger.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/Logger.cpp.o -MF CMakeFiles/server.dir/server/src/Logger.cpp.o.d -o CMakeFiles/server.dir/server/src/Logger.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/Logger.cpp"
 
 CMakeFiles/server.dir/server/src/Logger.cpp.i: cmake_force
@@ -142,7 +156,7 @@ CMakeFiles/server.dir/server/src/Logger.cpp.s: cmake_force
 CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o: CMakeFiles/server.dir/flags.make
 CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/PermissionChecker.cpp
 CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o -MF CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o.d -o CMakeFiles/server.dir/server/src/PermissionChecker.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/PermissionChecker.cpp"
 
 CMakeFiles/server.dir/server/src/PermissionChecker.cpp.i: cmake_force
@@ -156,7 +170,7 @@ CMakeFiles/server.dir/server/src/PermissionChecker.cpp.s: cmake_force
 CMakeFiles/server.dir/server/src/Server.cpp.o: CMakeFiles/server.dir/flags.make
 CMakeFiles/server.dir/server/src/Server.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/Server.cpp
 CMakeFiles/server.dir/server/src/Server.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/server.dir/server/src/Server.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/server.dir/server/src/Server.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/Server.cpp.o -MF CMakeFiles/server.dir/server/src/Server.cpp.o.d -o CMakeFiles/server.dir/server/src/Server.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/Server.cpp"
 
 CMakeFiles/server.dir/server/src/Server.cpp.i: cmake_force
@@ -170,7 +184,7 @@ CMakeFiles/server.dir/server/src/Server.cpp.s: cmake_force
 CMakeFiles/server.dir/server/src/SessionManager.cpp.o: CMakeFiles/server.dir/flags.make
 CMakeFiles/server.dir/server/src/SessionManager.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/SessionManager.cpp
 CMakeFiles/server.dir/server/src/SessionManager.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/server.dir/server/src/SessionManager.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/server.dir/server/src/SessionManager.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/SessionManager.cpp.o -MF CMakeFiles/server.dir/server/src/SessionManager.cpp.o.d -o CMakeFiles/server.dir/server/src/SessionManager.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/SessionManager.cpp"
 
 CMakeFiles/server.dir/server/src/SessionManager.cpp.i: cmake_force
@@ -184,7 +198,7 @@ CMakeFiles/server.dir/server/src/SessionManager.cpp.s: cmake_force
 CMakeFiles/server.dir/server/src/main.cpp.o: CMakeFiles/server.dir/flags.make
 CMakeFiles/server.dir/server/src/main.cpp.o: /mnt/f/download\ all/TransferFileNetworkP/server/src/main.cpp
 CMakeFiles/server.dir/server/src/main.cpp.o: CMakeFiles/server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/server.dir/server/src/main.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/server.dir/server/src/main.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/server.dir/server/src/main.cpp.o -MF CMakeFiles/server.dir/server/src/main.cpp.o.d -o CMakeFiles/server.dir/server/src/main.cpp.o -c "/mnt/f/download all/TransferFileNetworkP/server/src/main.cpp"
 
 CMakeFiles/server.dir/server/src/main.cpp.i: cmake_force
@@ -199,6 +213,7 @@ CMakeFiles/server.dir/server/src/main.cpp.s: cmake_force
 server_OBJECTS = \
 "CMakeFiles/server.dir/server/src/AuthManager.cpp.o" \
 "CMakeFiles/server.dir/server/src/ClientSession.cpp.o" \
+"CMakeFiles/server.dir/server/src/DataPaths.cpp.o" \
 "CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o" \
 "CMakeFiles/server.dir/server/src/GroupManager.cpp.o" \
 "CMakeFiles/server.dir/server/src/Logger.cpp.o" \
@@ -212,6 +227,7 @@ server_EXTERNAL_OBJECTS =
 
 server: CMakeFiles/server.dir/server/src/AuthManager.cpp.o
 server: CMakeFiles/server.dir/server/src/ClientSession.cpp.o
+server: CMakeFiles/server.dir/server/src/DataPaths.cpp.o
 server: CMakeFiles/server.dir/server/src/FileSystemManager.cpp.o
 server: CMakeFiles/server.dir/server/src/GroupManager.cpp.o
 server: CMakeFiles/server.dir/server/src/Logger.cpp.o
@@ -222,7 +238,7 @@ server: CMakeFiles/server.dir/server/src/main.cpp.o
 server: CMakeFiles/server.dir/build.make
 server: libcommon.a
 server: CMakeFiles/server.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_10) "Linking CXX executable server"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_11) "Linking CXX executable server"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/server.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

@@ -16,8 +16,11 @@ bool AuthClient::registerUser() {
     ByteBuffer buf;
     req.serialize(buf);
 
-    return client.sendPacket(
+    client.sendPacket(
         (uint16_t)PacketType::AUTH_REGISTER_REQ, buf);
+
+    std::cout << "Register success\n";
+    return true;
 }
 
 bool AuthClient::loginUser(bool& loggedIn) {
@@ -31,10 +34,10 @@ bool AuthClient::loginUser(bool& loggedIn) {
     ByteBuffer buf;
     req.serialize(buf);
 
-    if (!client.sendPacket(
-        (uint16_t)PacketType::AUTH_LOGIN_REQ, buf))
-        return false;
+    client.sendPacket(
+        (uint16_t)PacketType::AUTH_LOGIN_REQ, buf);
 
     loggedIn = true;
+    std::cout << "Login success\n";
     return true;
 }
