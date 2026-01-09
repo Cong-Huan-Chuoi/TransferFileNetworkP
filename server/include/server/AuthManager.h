@@ -1,29 +1,25 @@
 #pragma once
-#include<string>
-#include<unordered_map>
-#include "server/SessionManager.h"
+#include <string>
+#include <unordered_map>
 
-/*
- * AuthManager
-   - Quản lý đăng ký / đăng nhập
-   - Làm việc với SessionManager
- */
+enum class AuthResult {
+    SUCCESS,
+    USER_EXISTS,
+    INVALID_CREDENTIALS
+};
 
- class AuthManager{
-    public:
-        explicit AuthManager(const std::string& user_db_path);
-        bool register_user(const std::string& username, const std::string& password);
-        bool login_user(int fd,
-                    const std::string& username,
-                    const std::string& password,
-                    SessionManager& sessionManager);
+class AuthManager {
+public:
+    explicit AuthManager(const std::string& file);
 
-        void logout_user(int fd, SessionManager& sessionManager);
-    private:
-        void load_user();
-        void save_user(const std::string& username,
-                       const std::string& password);
-    private:
-        std::string db_path;
-        std::unordered_map<std::string, std::string> users; //username->pass         
- };
+    AuthResult registerUser(const std::string& user,
+                            const std::string& pass);
+    AuthResult verifyLogin(const std::string& user,
+                           const std::string& pass);
+
+private:
+    std::string dbFile;
+    std::unordered_map<std::string, std::string> users;
+
+    void saveToFile();
+};
