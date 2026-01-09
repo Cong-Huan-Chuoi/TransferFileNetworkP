@@ -1,13 +1,17 @@
 #pragma once
 #include <string>
-#include <mutex>
 
 class Logger {
 public:
-    explicit Logger(const std::string& file);
+    // ===== EXISTING CONTRACT =====
+    explicit Logger(const std::string& path);
     void log(const std::string& msg);
 
+    // ===== FOUNDATION ADD (STATIC) =====
+    static void info(const std::string& msg);
+    static void warn(const std::string& msg);
+    static void error(const std::string& msg);
+
 private:
-    std::string logFile;
-    std::mutex mtx;
+    std::string logPath;
 };

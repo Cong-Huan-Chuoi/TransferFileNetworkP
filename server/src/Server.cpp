@@ -6,6 +6,7 @@
 #include "server/PermissionChecker.h"
 #include "server/FileSystemManager.h"
 #include "server/Logger.h"
+#include "server/DataPaths.h"
 
 #include "protocol/packet_types.h"
 #include "protocol/packets.h"
@@ -17,16 +18,31 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
+#include <memory>
 
-#include "server/DataPaths.h"
+// ================== CORE MANAGERS (POINTER-BASED) ==================
 
-// ================== GLOBAL MANAGERS ==================
-
-static AuthManager authManager(DataPaths::usersDb());
-static GroupManager groupManager(DataPaths::groupsDb());
-static PermissionChecker permissionChecker(groupManager);
-static FileSystemManager fsManager(DataPaths::groupsDir());
+static std::unique_ptr<AuthManager> authManager;
+static std::unique_ptr<GroupManager> groupManager;
+static std::unique_ptr<FileSystemManager> fsManager;
+static std::unique_ptr<PermissionChecker> permissionChecker;
 static Logger logger("data/server.log");
+
+static bool coreInitialized = false;
+
+// ================== CORE INIT ==================
+
+static void initCoreOnce() {
+    if (coreInitialized) return;
+
+    authManager = std::make_unique<AuthManager>(DataPaths::usersDb());
+    groupManager = std::make_unique<GroupManager>(DataPaths::groupsDb());
+    fsManager = std::make_unique<FileSystemManager>(DataPaths::groupsDir());
+    permissionChecker =
+        std::make_unique<PermissionChecker>(*groupManager);
+
+    coreInitialized = true;
+}
 
 // ================== UTILS ==================
 
@@ -38,6 +54,8 @@ static void setNonBlocking(int fd) {
 // ================== SERVER ==================
 
 Server::Server(int port) {
+    initCoreOnce();              // 🔒 SAFE CORE INIT
+
     setupSocket(port);
     setupEpoll();
 }
@@ -163,172 +181,57 @@ void Server::dispatchPacket(ClientSession& session) {
 
     // ===== AUTH =====
     if (type == PacketType::AUTH_REGISTER_REQ) {
-    RegisterRequest req;
-    req.deserialize(buf);
-
-    authManager.registerUser(req.username, req.password);
-    return;
-}
-
-    if (type == PacketType::AUTH_LOGIN_REQ) {
-    LoginRequest req;
-    req.deserialize(buf);
-
-    AuthResult res =
-        authManager.verifyLogin(req.username, req.password);
-
-    if (res == AuthResult::SUCCESS) {
-        session.logged_in = true;
-        session.username = req.username;
-    }
-    return;
-}
-
-
-    // ===== REQUIRE LOGIN =====
-    if (!session.logged_in) {
+        RegisterRequest req;
+        req.deserialize(buf);
+        authManager->registerUser(req.username, req.password);
         return;
     }
+
+    if (type == PacketType::AUTH_LOGIN_REQ) {
+        LoginRequest req;
+        req.deserialize(buf);
+
+        AuthResult res =
+            authManager->verifyLogin(req.username, req.password);
+
+        if (res == AuthResult::SUCCESS) {
+            session.logged_in = true;
+            session.username = req.username;
+        }
+        return;
+    }
+
+    if (!session.logged_in) return;
 
     // ===== GROUP =====
     if (type == PacketType::GROUP_CREATE_REQ) {
         CreateGroupRequest req;
         req.deserialize(buf);
-
-        groupManager.createGroup(req.groupName,
-                                 session.username);
-        logger.log("CREATE_GROUP " + req.groupName +
-                   " by " + session.username);
+        groupManager->createGroup(req.groupName, session.username);
+        logger.log("CREATE_GROUP " + req.groupName);
         return;
     }
 
     if (type == PacketType::GROUP_JOIN_REQ) {
         JoinGroupRequest req;
         req.deserialize(buf);
-
-        groupManager.requestJoin(req.groupName,
-                                 session.username);
-        logger.log("JOIN_GROUP " + req.groupName +
-                   " by " + session.username);
-        return;
-    }
-    // ===== GROUP =====
-
-    if (type == PacketType::GROUP_CREATE_REQ) {
-        CreateGroupRequest req; req.deserialize(buf);
-        groupManager.createGroup(req.groupName, session.username);
-        logger.log("CREATE_GROUP " + req.groupName + " by " + session.username);
+        groupManager->requestJoin(req.groupName, session.username);
+        logger.log("JOIN_GROUP " + req.groupName);
         return;
     }
 
-    if (type == PacketType::GROUP_JOIN_REQ) {
-        JoinGroupRequest req; req.deserialize(buf);
-        groupManager.requestJoin(req.groupName, session.username);
-        logger.log("JOIN_GROUP " + req.groupName + " by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::GROUP_APPROVE_REQ) {
-        ApproveJoinRequest req; req.deserialize(buf);
-        groupManager.approveJoin(req.groupName, session.username, req.username);
-        logger.log("APPROVE_JOIN " + req.groupName + " user " + req.username + " by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::GROUP_INVITE_REQ) {
-        InviteUserRequest req; req.deserialize(buf);
-        groupManager.inviteUser(req.groupName, session.username, req.username);
-        logger.log("INVITE_USER " + req.username + " to " + req.groupName + " by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::GROUP_ACCEPT_INVITE_REQ) {
-        AcceptInviteRequest req; req.deserialize(buf);
-        groupManager.acceptInvite(req.groupName, session.username);
-        logger.log("ACCEPT_INVITE " + req.groupName + " by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::GROUP_LEAVE_REQ) {
-        LeaveGroupRequest req; req.deserialize(buf);
-        groupManager.leaveGroup(req.groupName, session.username);
-        logger.log("LEAVE_GROUP " + req.groupName + " by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::GROUP_KICK_REQ) {
-        KickMemberRequest req; req.deserialize(buf);
-        groupManager.kickMember(req.groupName, session.username, req.username);
-        logger.log("KICK_MEMBER " + req.username + " from " + req.groupName + " by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::GROUP_LIST_MEMBERS_REQ) {
-        ListMembersRequest req; req.deserialize(buf);
-        auto members = groupManager.listMembers(req.groupName);
-        ListMembersResponse res{members};
-        ByteBuffer outBuf;
-        res.serialize(outBuf);
-        // gửi response về client
-        PacketHeader hdr{};
-        hdr.type = static_cast<uint16_t>(PacketType::GROUP_LIST_MEMBERS_RES);
-        hdr.length = outBuf.size();
-        hdr.seq = 0;
-        hdr.checksum = 0;
-        send(session.fd, &hdr, sizeof(hdr), 0);
-        send(session.fd, outBuf.data(), outBuf.size(), 0);
-        logger.log("LIST_MEMBERS " + req.groupName + " by " + session.username);
-        return;
-    }
-    if (type == PacketType::GROUP_LIST_REQ) {
-        ListGroupsResponse res;
-        res.ownedGroups = groupManager.listGroupsOwnedByUser(session.username);
-        res.joinedGroups = groupManager.listGroupsByUser(session.username);
-
-        ByteBuffer outBuf;
-        res.serialize(outBuf);
-
-        PacketHeader hdr{};
-        hdr.type = static_cast<uint16_t>(PacketType::GROUP_LIST_RES);
-        hdr.length = outBuf.size();
-        hdr.seq = 0;
-        hdr.checksum = 0;
-
-        send(session.fd, &hdr, sizeof(hdr), 0);
-        if (outBuf.size() > 0)
-            send(session.fd, outBuf.data(), outBuf.size(), 0);
-
-        logger.log("LIST_GROUPS for " + session.username);
-        return;
-    }
-
-
-    // ===== FILE SYSTEM =====
+    // ===== FILE SYSTEM (DEMO) =====
     if (type == PacketType::FILE_LIST_REQ) {
-        // demo: list root
-        if (permissionChecker.canPerform(
+        if (permissionChecker->canPerform(
                 session.username,
                 session.current_group,
                 FileAction::LIST)) {
 
-            fsManager.list(session.current_group, ".");
-            logger.log("LIST_FILES by " + session.username);
+            fsManager->list(session.current_group, ".");
+            logger.log("LIST_FILES");
         }
         return;
     }
 
-    if (type == PacketType::FILE_MKDIR_REQ) {
-        // demo stub
-        logger.log("MKDIR by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::FILE_DELETE_REQ) {
-        // demo stub
-        logger.log("DELETE by " + session.username);
-        return;
-    }
-
-    // ===== UNKNOWN =====
     std::cout << "Unknown packet type\n";
 }

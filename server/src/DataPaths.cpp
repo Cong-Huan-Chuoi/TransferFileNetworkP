@@ -1,35 +1,63 @@
 #include "server/DataPaths.h"
 #include <filesystem>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
-namespace DataPaths {
+// ===== STATIC STORAGE =====
+fs::path DataPaths::projectRoot;
 
-std::string projectRoot() {
-    // giả định server chạy từ build/
-    // => project root = parent of build
-    fs::path cwd = fs::current_path();
+// ===== INIT (CALL ONCE AT STARTUP) =====
+void DataPaths::init(const fs::path& executablePath) {
+    // executablePath = argv[0]
+    fs::path p = fs::absolute(executablePath).parent_path();
 
-    if (cwd.filename() == "build") {
-        return cwd.parent_path().string();
+    // đi ngược lên cho tới khi thấy CMakeLists.txt
+    while (!p.empty()) {
+        if (fs::exists(p / "CMakeLists.txt")) {
+            projectRoot = p;
+            return;
+        }
+        p = p.parent_path();
     }
-    return cwd.string();
+
+    throw std::runtime_error("Cannot locate project root (CMakeLists.txt)");
 }
 
-std::string dataDir() {
-    return (fs::path(projectRoot()) / "data").string();
+// ===== EXISTING CONTRACT =====
+std::string DataPaths::groupsDir() {
+    return (dataRoot() / "groups").string();
 }
 
-std::string usersDb() {
-    return (fs::path(dataDir()) / "users.db").string();
+std::string DataPaths::usersDb() {
+    return (dataRoot() / "users.db").string();
 }
 
-std::string groupsDb() {
-    return (fs::path(dataDir()) / "groups.db").string();
+std::string DataPaths::groupsDb() {
+    return (dataRoot() / "groups.db").string();
 }
 
-std::string groupsDir() {
-    return (fs::path(dataDir()) / "groups").string();
+// ===== CORE IMPLEMENTATION =====
+fs::path DataPaths::dataRoot() {
+    if (projectRoot.empty()) {
+        throw std::runtime_error("DataPaths::init() not called");
+    }
+    return ensureDir(projectRoot / "data");
 }
 
+fs::path DataPaths::groupRoot(const std::string& groupId) {
+    if (groupId.empty())
+        throw std::runtime_error("groupId empty");
+    return ensureDir(dataRoot() / "groups" / groupId);
+}
+
+fs::path DataPaths::groupFiles(const std::string& groupId) {
+    return ensureDir(groupRoot(groupId) / "files");
+}
+
+fs::path DataPaths::ensureDir(const fs::path& p) {
+    if (!fs::exists(p)) {
+        fs::create_directories(p);
+    }
+    return p;
 }
