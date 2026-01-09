@@ -6,7 +6,10 @@
 #include "server/PermissionChecker.h"
 #include "server/FileSystemManager.h"
 #include "server/Logger.h"
-#include "server/DataPaths.h"
+
+#include "server/services/AuthService.h"
+#include "server/services/GroupService.h"
+#include "server/services/FileService.h"
 
 #include "protocol/packet_types.h"
 #include "protocol/packets.h"
@@ -18,28 +21,35 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
-#include <memory>
 
-// ================== CORE MANAGERS (POINTER-BASED) ==================
+#include "server/DataPaths.h"
 
-static std::unique_ptr<AuthManager> authManager;
-static std::unique_ptr<GroupManager> groupManager;
-static std::unique_ptr<FileSystemManager> fsManager;
-static std::unique_ptr<PermissionChecker> permissionChecker;
-static Logger logger("data/server.log");
+// ================== CORE SINGLETON ==================
 
 static bool coreInitialized = false;
 
-// ================== CORE INIT ==================
+static AuthManager* authManager = nullptr;
+static GroupManager* groupManager = nullptr;
+static FileSystemManager* fsManager = nullptr;
+static PermissionChecker* permissionChecker = nullptr;
+static Logger* logger = nullptr;
+
+static AuthService* authService = nullptr;
+static GroupService* groupService = nullptr;
+static FileService* fileService = nullptr;
 
 static void initCoreOnce() {
     if (coreInitialized) return;
 
-    authManager = std::make_unique<AuthManager>(DataPaths::usersDb());
-    groupManager = std::make_unique<GroupManager>(DataPaths::groupsDb());
-    fsManager = std::make_unique<FileSystemManager>(DataPaths::groupsDir());
-    permissionChecker =
-        std::make_unique<PermissionChecker>(*groupManager);
+    authManager = new AuthManager(DataPaths::usersDb());
+    groupManager = new GroupManager(DataPaths::groupsDb());
+    fsManager = new FileSystemManager(DataPaths::groupsDir());
+    permissionChecker = new PermissionChecker(*groupManager);
+    logger = new Logger("data/server.log");
+
+    authService = new AuthService(*authManager);
+    groupService = new GroupService(*groupManager);
+    fileService = new FileService(*fsManager, *permissionChecker);
 
     coreInitialized = true;
 }
@@ -54,8 +64,7 @@ static void setNonBlocking(int fd) {
 // ================== SERVER ==================
 
 Server::Server(int port) {
-    initCoreOnce();              // 🔒 SAFE CORE INIT
-
+    initCoreOnce();
     setupSocket(port);
     setupEpoll();
 }
@@ -183,18 +192,14 @@ void Server::dispatchPacket(ClientSession& session) {
     if (type == PacketType::AUTH_REGISTER_REQ) {
         RegisterRequest req;
         req.deserialize(buf);
-        authManager->registerUser(req.username, req.password);
+        authService->registerUser(req.username, req.password);
         return;
     }
 
     if (type == PacketType::AUTH_LOGIN_REQ) {
         LoginRequest req;
         req.deserialize(buf);
-
-        AuthResult res =
-            authManager->verifyLogin(req.username, req.password);
-
-        if (res == AuthResult::SUCCESS) {
+        if (authService->login(req.username, req.password)) {
             session.logged_in = true;
             session.username = req.username;
         }
@@ -207,31 +212,113 @@ void Server::dispatchPacket(ClientSession& session) {
     if (type == PacketType::GROUP_CREATE_REQ) {
         CreateGroupRequest req;
         req.deserialize(buf);
-        groupManager->createGroup(req.groupName, session.username);
-        logger.log("CREATE_GROUP " + req.groupName);
+        groupService->createGroup(session.username, req.groupName);
+        logger->log("CREATE_GROUP " + req.groupName);
         return;
     }
 
     if (type == PacketType::GROUP_JOIN_REQ) {
         JoinGroupRequest req;
         req.deserialize(buf);
-        groupManager->requestJoin(req.groupName, session.username);
-        logger.log("JOIN_GROUP " + req.groupName);
+        groupService->requestJoin(session.username, req.groupName);
+        logger->log("JOIN_GROUP " + req.groupName);
         return;
     }
 
-    // ===== FILE SYSTEM (DEMO) =====
+    if (type == PacketType::GROUP_APPROVE_REQ) {
+        ApproveJoinRequest req;
+        req.deserialize(buf);
+        groupService->approveJoin(session.username,
+                                  req.username,
+                                  req.groupName);
+        logger->log("APPROVE_JOIN " + req.groupName);
+        return;
+    }
+
+    if (type == PacketType::GROUP_INVITE_REQ) {
+        InviteUserRequest req;
+        req.deserialize(buf);
+        groupService->inviteUser(session.username,
+                                 req.username,
+                                 req.groupName);
+        logger->log("INVITE_USER " + req.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LEAVE_REQ) {
+        LeaveGroupRequest req;
+        req.deserialize(buf);
+        groupService->leaveGroup(session.username, req.groupName);
+        logger->log("LEAVE_GROUP " + req.groupName);
+        return;
+    }
+
+    if (type == PacketType::GROUP_KICK_REQ) {
+        KickMemberRequest req;
+        req.deserialize(buf);
+        groupService->kickUser(session.username,
+                               req.username,
+                               req.groupName);
+        logger->log("KICK_MEMBER " + req.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LIST_MEMBERS_REQ) {
+        ListMembersRequest req;
+        req.deserialize(buf);
+        auto members =
+            groupService->listMembers(session.username,
+                                      req.groupName);
+
+        ListMembersResponse res{members};
+        ByteBuffer outBuf;
+        res.serialize(outBuf);
+
+        PacketHeader hdr{};
+        hdr.type = static_cast<uint16_t>(
+            PacketType::GROUP_LIST_MEMBERS_RES);
+        hdr.length = outBuf.size();
+
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        send(session.fd, outBuf.data(), outBuf.size(), 0);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LIST_REQ) {
+        ListGroupsResponse res;
+        res.ownedGroups =
+            groupService->listOwnedGroups(session.username);
+        res.joinedGroups =
+            groupService->listJoinedGroups(session.username);
+
+        ByteBuffer outBuf;
+        res.serialize(outBuf);
+
+        PacketHeader hdr{};
+        hdr.type =
+            static_cast<uint16_t>(PacketType::GROUP_LIST_RES);
+        hdr.length = outBuf.size();
+
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        send(session.fd, outBuf.data(), outBuf.size(), 0);
+        return;
+    }
+
+    // ===== FILE =====
     if (type == PacketType::FILE_LIST_REQ) {
-        if (permissionChecker->canPerform(
-                session.username,
-                session.current_group,
-                FileAction::LIST)) {
-
-            fsManager->list(session.current_group, ".");
-            logger.log("LIST_FILES");
-        }
+        fileService->list(session.username,
+                          session.current_group,
+                          ".");
         return;
     }
 
-    std::cout << "Unknown packet type\n";
+    if (type == PacketType::FILE_MKDIR_REQ) {
+        logger->log("MKDIR");
+        return;
+    }
+
+    if (type == PacketType::FILE_DELETE_REQ) {
+        logger->log("DELETE");
+        return;
+    }
 }

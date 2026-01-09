@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # =========================
-# COMMON (protocol)
+# INCLUDE DIRECTORIES
 # =========================
 include_directories(
     ${PROJECT_SOURCE_DIR}/common/include
@@ -13,6 +13,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/client/include
 )
 
+# =========================
+# COMMON (protocol)
+# =========================
 file(GLOB COMMON_SRC
     common/src/*.cpp
 )
@@ -22,11 +25,18 @@ add_library(common STATIC ${COMMON_SRC})
 # =========================
 # SERVER
 # =========================
-file(GLOB SERVER_SRC
+file(GLOB SERVER_CORE_SRC
     server/src/*.cpp
 )
 
-add_executable(server ${SERVER_SRC})
+file(GLOB SERVER_SERVICE_SRC
+    server/src/services/*.cpp
+)
+
+add_executable(server
+    ${SERVER_CORE_SRC}
+    ${SERVER_SERVICE_SRC}
+)
 
 target_link_libraries(server
     common
