@@ -1,33 +1,21 @@
 #pragma once
-
 #include <string>
-#include "protocol/bytebuffer.h"
-#include "client/Session.h"
 #include "protocol/packet_header.h"
-
-class AuthClient;
-class GroupClient;
-class FileClient;
+#include "protocol/bytebuffer.h"
 
 class Client {
 public:
     Client(const std::string& host, int port);
     ~Client();
 
-    void run();
+    bool connectToServer();
+    bool sendPacket(uint16_t type, ByteBuffer& payload);
+    bool recvPacket(PacketHeader& header, ByteBuffer& payload);
 
-    // dùng chung cho sub-client
-    void send_packet(PacketType type, const std::string& payload);
-    bool recv_packet(PacketHeader& h, std::vector<uint8_t>& payload);
-
-    Session& session() { return sess; }
+    bool isConnected() const { return sockfd >= 0; }
 
 private:
-    int sock;
-    ByteBuffer buffer;
-    Session sess;
-
-    AuthClient* auth;
-    GroupClient* group;
-    FileClient* file;
+    std::string host;
+    int port;
+    int sockfd;
 };

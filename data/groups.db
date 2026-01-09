@@ -1,0 +1,3 @@
+# group|owner|members|pending_join|pending_invite
+team1|owner=alice|members=alice|pending_join=|pending_invite=
+team2|owner=bob|members=bob|pending_join=|pending_invite=

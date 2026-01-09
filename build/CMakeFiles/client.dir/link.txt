@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/client.dir/client/src/AuthClient.cpp.o CMakeFiles/client.dir/client/src/Client.cpp.o CMakeFiles/client.dir/client/src/FileClient.cpp.o CMakeFiles/client.dir/client/src/GroupClient.cpp.o CMakeFiles/client.dir/client/src/main.cpp.o -o client  libcommon.a 

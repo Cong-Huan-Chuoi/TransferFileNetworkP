@@ -1,12 +1,12 @@
 #pragma once
-#include <string>
-
-class Client;
+#include "Client.h"
 
 class GroupClient {
 public:
     explicit GroupClient(Client& c);
-    bool handle(const std::string& cmd);
+
+    void createGroup();
+    void joinGroup();
 
 private:
     Client& client;

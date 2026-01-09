@@ -2,82 +2,60 @@
 #include <fstream>
 #include <sstream>
 
-// khởi tạo AuthManager: load user.db vào memory
-AuthManager::AuthManager(const std::string& user_db_path)
-    : db_path(user_db_path){
-        load_user();
-}
+AuthManager::AuthManager(const std::string& userDbPath)
+    : dbPath(userDbPath) {}
 
-// đọc file users.db
-void AuthManager::load_user(){
-    std::ifstream file(db_path);
-    if(!file.is_open())
-        return;
-    
+bool AuthManager::userExists(const std::string& username) {
+    std::ifstream in(dbPath);
+    if (!in.is_open()) return false;
+
     std::string line;
-    while (std::getline(file, line)){
+    while (std::getline(in, line)) {
         std::istringstream iss(line);
-        std::string username, password;
-        if (std::getline(iss, username, ':') &&
-            std::getline(iss, password)){
-                users[username] = password;
-            }
+        std::string user;
+        if (std::getline(iss, user, '|')) {
+            if (user == username) return true;
+        }
     }
+    return false;
 }
 
-// ghi thêm user mới vào users.db
+AuthResult AuthManager::registerUser(const std::string& username,
+                                     const std::string& password) {
+    std::lock_guard<std::mutex> lock(dbMutex);
 
-void AuthManager::save_user(const std::string& username,
-                            const std::string& password){
-    std::ofstream file(db_path, std::ios::app);
-    file << username << ":" << password << "\n";
+    if (userExists(username))
+        return AuthResult::USER_EXISTS;
+
+    std::ofstream out(dbPath, std::ios::app);
+    if (!out.is_open())
+        return AuthResult::FILE_ERROR;
+
+    out << username << "|" << password << "\n";
+    return AuthResult::SUCCESS;
 }
 
-// register
+AuthResult AuthManager::verifyLogin(const std::string& username,
+                                    const std::string& password) {
+    std::lock_guard<std::mutex> lock(dbMutex);
 
-bool AuthManager::register_user(const std::string& username,
-                                const std::string& password) {
-    if (users.count(username))
-        return false;
+    std::ifstream in(dbPath);
+    if (!in.is_open())
+        return AuthResult::FILE_ERROR;
 
-    users[username] = password;
-    save_user(username, password);
-    return true;
-}
-
-/*
- * Đăng nhập
- */
-bool AuthManager::login_user(int fd,
-                             const std::string& username,
-                             const std::string& password,
-                             SessionManager& sessionManager) {
-    auto it = users.find(username);
-    if (it == users.end())
-        return false;
-
-    if (it->second != password)
-        return false;
-
-    ClientSession* session = sessionManager.get_session(fd);
-    if (!session)
-        return false;
-
-    session->logged_in = true;
-    session->username = username;
-    return true;
-}
-
-/*
- * Đăng xuất
- */
-void AuthManager::logout_user(int fd,
-                              SessionManager& sessionManager) {
-    ClientSession* session = sessionManager.get_session(fd);
-    if (!session)
-        return;
-
-    session->logged_in = false;
-    session->username.clear();
-    session->current_group.clear();
+    std::string line;
+    while (std::getline(in, line)) {
+        std::istringstream iss(line);
+        std::string user, pass;
+        if (std::getline(iss, user, '|') &&
+            std::getline(iss, pass)) {
+            if (user == username) {
+                if (pass == password)
+                    return AuthResult::SUCCESS;
+                else
+                    return AuthResult::WRONG_PASSWORD;
+            }
+        }
+    }
+    return AuthResult::USER_NOT_FOUND;
 }

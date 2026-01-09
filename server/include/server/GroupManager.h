@@ -1,72 +1,58 @@
 #pragma once
-
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
+#include <unordered_map>
+#include <mutex>
 
-// Metadata của 1 nhóm
 struct Group {
     std::string name;
     std::string owner;
-
-    std::unordered_set<std::string> members;
-    std::unordered_set<std::string> pending_requests;
-    std::unordered_set<std::string> invited_users;
+    std::vector<std::string> members;
+    std::vector<std::string> pending_join;
+    std::vector<std::string> pending_invite;
 };
 
-/*
-GroupManager:
-    quản lý metadata nhóm
-    lưu vào file groups.db
-*/
+class GroupManager {
+public:
+    explicit GroupManager(const std::string& dbPath);
 
-class GroupManager{
-    public:
-        explicit GroupManager(const std::string& db_path);
+    bool createGroup(const std::string& groupName,
+                     const std::string& owner);
 
-        bool create_group(const std::string& group_name,
-                          const std::string& owner);
-        
-        bool request_join(const std::string& group_name,
-                          const std::string& username);
+    std::vector<std::string> listGroups();
 
-        bool invite_user(const std::string& group_name,
-                         const std::string& owner,
-                         const std::string& username);
-        
-        bool approve_join_request(const std::string& group_name,
-                                  const std::string& owner,
-                                  const std::string& username);
+    bool requestJoin(const std::string& groupName,
+                     const std::string& username);
 
-        bool accept_invite(const std::string& group_name,
-                           const std::string& username);
+    bool approveJoin(const std::string& groupName,
+                     const std::string& owner,
+                     const std::string& username);
 
-        bool leave_group(const std::string& group_name,
-                         const std::string& username);
+    bool inviteUser(const std::string& groupName,
+                    const std::string& owner,
+                    const std::string& username);
 
-        bool remove_member(const std::string& group_name,
-                           const std::string& owner,
-                           const std::string& username);
+    bool acceptInvite(const std::string& groupName,
+                      const std::string& username);
 
-        //query
+    bool leaveGroup(const std::string& groupName,
+                    const std::string& username);
 
-        std::vector<std::string> list_groups() const;
-        std::vector<std::string> list_members(const std::string& group_name) const;
+    bool kickMember(const std::string& groupName,
+                    const std::string& owner,
+                    const std::string& username);
 
-        bool is_member(const std::string& group_name,
-                       const std::string& username) const;
+    std::vector<std::string> listMembers(const std::string& groupName);
 
-        bool is_owner(const std::string& group_name,
-                      const std::string& username) const;
+private:
+    std::string dbPath;
+    std::mutex dbMutex;
 
-    private:
-            void load_db();
-            void save_db() const;
+    std::unordered_map<std::string, Group> loadGroups();
+    void saveGroups(const std::unordered_map<std::string, Group>& groups);
 
-            static std::unordered_set<std::string> split(const std::string& s);
-            static std::string join(const std::unordered_set<std::string>& s);
-    private:
-            std::string db_path;
-            std::unordered_map<std::string, Group> groups;
+    bool contains(const std::vector<std::string>& v,
+                  const std::string& x);
+    void remove(std::vector<std::string>& v,
+                const std::string& x);
 };

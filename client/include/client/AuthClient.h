@@ -1,12 +1,12 @@
 #pragma once
-#include <string>
-
-class Client;
+#include "Client.h"
 
 class AuthClient {
 public:
     explicit AuthClient(Client& c);
-    bool handle(const std::string& cmd);
+
+    bool registerUser();
+    bool loginUser(bool& loggedIn);
 
 private:
     Client& client;
