@@ -1,22 +1,26 @@
 #pragma once
 #include <string>
 #include "protocol/bytebuffer.h"
+#include "protocol/packet_header.h"
 
-/*
-ClientSession
-    đại diện cho 1 client đang kết nối
-    gắn với 1 socket fd
-    lưu trang thái đăng nhập và group
-    lưu ByteBuffer để parse TCP stream
-*/
+enum class RecvState {
+    READ_HEADER,
+    READ_PAYLOAD,
+    READ_FILE
+};
 
-struct ClientSession{
-    int fd;  //socket của client
-    bool logged_in;
+struct ClientSession {
+    int fd;
+    bool logged_in = false;
     std::string username;
     std::string current_group;
-    ByteBuffer buffer; // buffer TCP stream
 
-    ClientSession(int fd_)
-        : fd(fd_), logged_in(false){}
+    // recv state
+    RecvState state = RecvState::READ_HEADER;
+    PacketHeader currentHeader{};
+    ByteBuffer payloadBuffer;
+
+    // file streaming
+    bool receiving_file = false;
+    uint64_t remaining_file_bytes = 0;
 };
