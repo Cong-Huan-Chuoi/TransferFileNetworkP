@@ -209,9 +209,33 @@ bool GroupManager::kickMember(const std::string& groupName,
     return true;
 }
 
-std::vector<std::string>
-GroupManager::listMembers(const std::string& groupName) {
+std::vector<std::string> GroupManager::listMembers(const std::string& groupName) {
     std::lock_guard<std::mutex> lock(dbMutex);
     auto groups = loadGroups();
     return groups[groupName].members;
 }
+
+std::vector<std::string> GroupManager::listGroupsByUser(const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    std::vector<std::string> res;
+    for (auto& [name, g] : groups) {
+        if (contains(g.members, username)) {
+            res.push_back(name);
+        }
+    }
+    return res;
+}
+
+std::vector<std::string> GroupManager::listGroupsOwnedByUser(const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    std::vector<std::string> res;
+    for (auto& [name, g] : groups) {
+        if (g.owner == username) {
+            res.push_back(name);
+        }
+    }
+    return res;
+}
+

@@ -212,6 +212,96 @@ void Server::dispatchPacket(ClientSession& session) {
                    " by " + session.username);
         return;
     }
+    // ===== GROUP =====
+
+    if (type == PacketType::GROUP_CREATE_REQ) {
+        CreateGroupRequest req; req.deserialize(buf);
+        groupManager.createGroup(req.groupName, session.username);
+        logger.log("CREATE_GROUP " + req.groupName + " by " + session.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_JOIN_REQ) {
+        JoinGroupRequest req; req.deserialize(buf);
+        groupManager.requestJoin(req.groupName, session.username);
+        logger.log("JOIN_GROUP " + req.groupName + " by " + session.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_APPROVE_REQ) {
+        ApproveJoinRequest req; req.deserialize(buf);
+        groupManager.approveJoin(req.groupName, session.username, req.username);
+        logger.log("APPROVE_JOIN " + req.groupName + " user " + req.username + " by " + session.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_INVITE_REQ) {
+        InviteUserRequest req; req.deserialize(buf);
+        groupManager.inviteUser(req.groupName, session.username, req.username);
+        logger.log("INVITE_USER " + req.username + " to " + req.groupName + " by " + session.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_ACCEPT_INVITE_REQ) {
+        AcceptInviteRequest req; req.deserialize(buf);
+        groupManager.acceptInvite(req.groupName, session.username);
+        logger.log("ACCEPT_INVITE " + req.groupName + " by " + session.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LEAVE_REQ) {
+        LeaveGroupRequest req; req.deserialize(buf);
+        groupManager.leaveGroup(req.groupName, session.username);
+        logger.log("LEAVE_GROUP " + req.groupName + " by " + session.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_KICK_REQ) {
+        KickMemberRequest req; req.deserialize(buf);
+        groupManager.kickMember(req.groupName, session.username, req.username);
+        logger.log("KICK_MEMBER " + req.username + " from " + req.groupName + " by " + session.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LIST_MEMBERS_REQ) {
+        ListMembersRequest req; req.deserialize(buf);
+        auto members = groupManager.listMembers(req.groupName);
+        ListMembersResponse res{members};
+        ByteBuffer outBuf;
+        res.serialize(outBuf);
+        // gửi response về client
+        PacketHeader hdr{};
+        hdr.type = static_cast<uint16_t>(PacketType::GROUP_LIST_MEMBERS_RES);
+        hdr.length = outBuf.size();
+        hdr.seq = 0;
+        hdr.checksum = 0;
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        send(session.fd, outBuf.data(), outBuf.size(), 0);
+        logger.log("LIST_MEMBERS " + req.groupName + " by " + session.username);
+        return;
+    }
+    if (type == PacketType::GROUP_LIST_REQ) {
+        ListGroupsResponse res;
+        res.ownedGroups = groupManager.listGroupsOwnedByUser(session.username);
+        res.joinedGroups = groupManager.listGroupsByUser(session.username);
+
+        ByteBuffer outBuf;
+        res.serialize(outBuf);
+
+        PacketHeader hdr{};
+        hdr.type = static_cast<uint16_t>(PacketType::GROUP_LIST_RES);
+        hdr.length = outBuf.size();
+        hdr.seq = 0;
+        hdr.checksum = 0;
+
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        if (outBuf.size() > 0)
+            send(session.fd, outBuf.data(), outBuf.size(), 0);
+
+        logger.log("LIST_GROUPS for " + session.username);
+        return;
+    }
+
 
     // ===== FILE SYSTEM =====
     if (type == PacketType::FILE_LIST_REQ) {

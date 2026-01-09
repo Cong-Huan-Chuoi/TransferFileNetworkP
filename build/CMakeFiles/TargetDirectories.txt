@@ -1,5 +1,0 @@
-/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles/common.dir
-/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles/server.dir
-/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles/client.dir
-/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles/edit_cache.dir
-/mnt/f/download all/TransferFileNetworkP/build/CMakeFiles/rebuild_cache.dir

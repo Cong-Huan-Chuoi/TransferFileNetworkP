@@ -43,6 +43,9 @@ public:
                     const std::string& username);
 
     std::vector<std::string> listMembers(const std::string& groupName);
+    std::vector<std::string> listGroupsByUser(const std::string& username);
+    std::vector<std::string> listGroupsOwnedByUser(const std::string& username);
+
 
 private:
     std::string dbPath;
