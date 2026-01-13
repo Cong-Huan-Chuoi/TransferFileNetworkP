@@ -42,6 +42,12 @@ enum class PacketType : uint16_t {
   GROUP_LIST_REQ          = 26,
   GROUP_LIST_RES          = 27,
 
+  GROUP_PENDING_REQ = 28,
+  GROUP_PENDING_RES = 29,
+  GROUP_REJECT_JOIN_REQ = 30,
+  GROUP_REJECT_JOIN_RES = 31,
+  GROUP_REJECT_INVITE_REQ = 32,
+  GROUP_REJECT_INVITE_RES = 33,
 
   /* ================= FILE SYSTEM (CONTROL) ================= */
   FILE_LIST_REQ   = 40,

@@ -371,6 +371,35 @@ void Server::dispatchPacket(ClientSession& session) {
         return;
     }
 
+    if (type == PacketType::GROUP_PENDING_REQ) {
+        PendingListResponse res;
+        auto groups = groupManager.loadGroups();
+        for (auto& [name,g] : groups) {
+            for (auto& u : g.pending_join)
+                res.joinRequests.push_back({name,u});
+            for (auto& u : g.pending_invite)
+                res.invites.push_back({name,u});
+        }
+        ByteBuffer out; res.serialize(out);
+        PacketHeader hdr_net{};
+        hdr_net.type = htons((uint16_t)PacketType::GROUP_PENDING_RES);
+        hdr_net.length = htonl((uint32_t)out.size());
+        send(session.fd,&hdr_net,sizeof(hdr_net),0);
+        if(out.size()>0) send(session.fd,out.data(),out.size(),0);
+        return;
+    }
+    if (type == PacketType::GROUP_REJECT_JOIN_REQ) {
+        RejectJoinRequest req; req.deserialize(buf);
+        groupManager.rejectJoin(req.groupName, session.username, req.username);
+        return;
+    }
+    if (type == PacketType::GROUP_REJECT_INVITE_REQ) {
+        RejectInviteRequest req; req.deserialize(buf);
+        groupManager.rejectInvite(req.groupName, session.username);
+        return;
+    }
+
+
     // ===== FILE SYSTEM =====
     if (type == PacketType::FILE_LIST_REQ) {
         FileListRequest req; req.deserialize(buf);

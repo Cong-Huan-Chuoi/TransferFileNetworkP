@@ -127,6 +127,47 @@ void ListGroupsResponse::deserialize(ByteBuffer& buf) {
     for (uint32_t i = 0; i < n2; ++i) joinedGroups.push_back(buf.readString());
 }
 
+void PendingEntry::serialize(ByteBuffer& buf) const {
+    buf.writeString(groupName);
+    buf.writeString(username);
+}
+void PendingEntry::deserialize(ByteBuffer& buf) {
+    groupName = buf.readString();
+    username = buf.readString();
+}
+
+void PendingListResponse::serialize(ByteBuffer& buf) const {
+    buf.write<uint32_t>(joinRequests.size());
+    for (auto& e : joinRequests) e.serialize(buf);
+    buf.write<uint32_t>(invites.size());
+    for (auto& e : invites) e.serialize(buf);
+}
+void PendingListResponse::deserialize(ByteBuffer& buf) {
+    uint32_t n1 = buf.read<uint32_t>();
+    joinRequests.clear();
+    for (uint32_t i=0;i<n1;++i) { PendingEntry e; e.deserialize(buf); joinRequests.push_back(e); }
+    uint32_t n2 = buf.read<uint32_t>();
+    invites.clear();
+    for (uint32_t i=0;i<n2;++i) { PendingEntry e; e.deserialize(buf); invites.push_back(e); }
+}
+
+void RejectJoinRequest::serialize(ByteBuffer& buf) const {
+    buf.writeString(groupName);
+    buf.writeString(username);
+}
+void RejectJoinRequest::deserialize(ByteBuffer& buf) {
+    groupName = buf.readString();
+    username = buf.readString();
+}
+
+void RejectInviteRequest::serialize(ByteBuffer& buf) const {
+    buf.writeString(groupName);
+    buf.writeString(username);
+}
+void RejectInviteRequest::deserialize(ByteBuffer& buf) {
+    groupName = buf.readString();
+    username = buf.readString();
+}
 
 
 // ===== FILE CONTROL =====

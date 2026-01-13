@@ -98,6 +98,33 @@ struct ListGroupsResponse {
     void deserialize(ByteBuffer& buf);
 };
 
+struct PendingEntry {
+    std::string groupName;
+    std::string username;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
+};
+
+struct PendingListResponse {
+    std::vector<PendingEntry> joinRequests;
+    std::vector<PendingEntry> invites;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
+};
+
+struct RejectJoinRequest {
+    std::string groupName;
+    std::string username;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
+};
+
+struct RejectInviteRequest {
+    std::string groupName;
+    std::string username;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
+};
 
 
 

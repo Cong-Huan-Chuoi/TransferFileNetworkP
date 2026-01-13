@@ -149,7 +149,10 @@ bool GroupManager::approveJoin(const std::string& groupName,
     if (!contains(g.pending_join, username)) return false;
 
     remove(g.pending_join, username);
-    g.members.push_back(username);
+
+    if (!contains(g.members, username)) { 
+        g.members.push_back(username); 
+    }
     saveGroups(groups);
     return true;
 }
@@ -180,7 +183,9 @@ bool GroupManager::acceptInvite(const std::string& groupName,
     if (!contains(g.pending_invite, username)) return false;
 
     remove(g.pending_invite, username);
-    g.members.push_back(username);
+    if (!contains(g.members, username)){
+        g.members.push_back(username);
+    }
     saveGroups(groups);
     return true;
 }
@@ -213,6 +218,31 @@ bool GroupManager::kickMember(const std::string& groupName,
     saveGroups(groups);
     return true;
 }
+
+bool GroupManager::rejectJoin(const std::string& groupName,
+                              const std::string& owner,
+                              const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+    if (g.owner != owner) return false;
+    if (!contains(g.pending_join, username)) return false;
+    remove(g.pending_join, username);
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::rejectInvite(const std::string& groupName,
+                                const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+    if (!contains(g.pending_invite, username)) return false;
+    remove(g.pending_invite, username);
+    saveGroups(groups);
+    return true;
+}
+
 
 std::vector<std::string> GroupManager::listMembers(const std::string& groupName) {
     std::lock_guard<std::mutex> lock(dbMutex);

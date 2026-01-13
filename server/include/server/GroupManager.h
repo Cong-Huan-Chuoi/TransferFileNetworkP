@@ -41,7 +41,11 @@ public:
     bool kickMember(const std::string& groupName,
                     const std::string& owner,
                     const std::string& username);
-
+    bool rejectJoin(const std::string& groupName,
+                    const std::string& owner,
+                    const std::string& username);
+    bool rejectInvite(const std::string& groupName,
+                      const std::string& username);
     std::vector<std::string> listMembers(const std::string& groupName);
     std::vector<std::string> listGroupsByUser(const std::string& username);
     std::vector<std::string> listGroupsOwnedByUser(const std::string& username);

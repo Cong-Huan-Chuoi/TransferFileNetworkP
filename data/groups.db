@@ -1,4 +1,4 @@
-huanchet|owner=huan1|members=huan1|pending_join=|pending_invite=
+huan2k4|owner=alice|members=alice,huan1|pending_join=|pending_invite=huan2
+team1|owner=alice|members=alice,huan2|pending_join=|pending_invite=
 team2|owner=bob|members=bob|pending_join=|pending_invite=
-team1|owner=alice|members=alice|pending_join=huan2|pending_invite=
-huan2k4|owner=alice|members=alice,huan2|pending_join=huan2|pending_invite=
+huanchet|owner=huan1|members=huan1,alice|pending_join=|pending_invite=huan2

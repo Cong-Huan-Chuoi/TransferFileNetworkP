@@ -12,12 +12,13 @@ Logger::Logger(const std::string& file)
         if (!p.empty() && !fs::exists(p)) {
             fs::create_directories(p);
         }
-        // Tạo file nếu chưa có, mở rồi đóng ngay
-        std::ofstream out(logFile, std::ios::app);
+        // Mỗi lần khởi tạo Logger thì xóa nội dung file cũ
+        std::ofstream out(logFile, std::ios::trunc);
     } catch (...) {
-        // Không ném ngoại lệ ở constructor logger; ghi lỗi có thể được xử lý khác
+        // Không ném ngoại lệ ở constructor logger
     }
 }
+
 
 void Logger::log(const std::string& msg) {
     std::lock_guard<std::mutex> lock(mtx);
