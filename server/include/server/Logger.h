@@ -1,32 +1,17 @@
 #pragma once
-
 #include <string>
-#include <fstream>
-#include <mutex>
 
-enum class LogLevel {
-    INFO,
-    WARN,
-    ERROR
-};
-
-/*
- * Logger
- *  - Ghi log server
- */
 class Logger {
 public:
-    explicit Logger(const std::string& file);
+    // ===== EXISTING CONTRACT =====
+    explicit Logger(const std::string& path);
+    void log(const std::string& msg);
 
-    void log(LogLevel level, const std::string& msg);
-
-    void info(const std::string& msg);
-    void warn(const std::string& msg);
-    void error(const std::string& msg);
+    // ===== FOUNDATION ADD (STATIC) =====
+    static void info(const std::string& msg);
+    static void warn(const std::string& msg);
+    static void error(const std::string& msg);
 
 private:
-    std::ofstream ofs;
-    std::mutex mtx;
-
-    std::string level_to_string(LogLevel level);
+    std::string logPath;
 };

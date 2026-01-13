@@ -1,16 +1,12 @@
 #pragma once
-#include <string>
-
-class Client;
+#include "Client.h"
 
 class FileClient {
 public:
     explicit FileClient(Client& c);
-    bool handle(const std::string& cmd);
+
+    void listFiles();
 
 private:
-    void upload(const std::string& path);
-    void download(const std::string& path);
-
     Client& client;
 };

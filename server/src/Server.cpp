@@ -1,40 +1,92 @@
 #include "server/Server.h"
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/epoll.h>
-#include <unistd.h>
-#include <cstring>
+#include "server/SessionManager.h"
+#include "server/AuthManager.h"
+#include "server/GroupManager.h"
+#include "server/PermissionChecker.h"
+#include "server/FileSystemManager.h"
+#include "server/Logger.h"
 
+#include "server/services/AuthService.h"
+#include "server/services/GroupService.h"
+#include "server/services/FileService.h"
+
+#include "protocol/packet_types.h"
 #include "protocol/packets.h"
 
-Server::Server(int port_)
-    : port(port_),
-      authManager("data/users.db"),
-      groupManager("data/groups.db"),
-      fsManager("data/groups"),
-      fileReceiver(fsManager),
-      permissionChecker(sessionManager, groupManager),
-      logger("data/server.log") {
-    setup_socket();
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cstring>
+#include <iostream>
+#include <algorithm>
+
+#include "server/DataPaths.h"
+
+// ================== CORE SINGLETON ==================
+
+static bool coreInitialized = false;
+
+static AuthManager* authManager = nullptr;
+static GroupManager* groupManager = nullptr;
+static FileSystemManager* fsManager = nullptr;
+static PermissionChecker* permissionChecker = nullptr;
+static Logger* logger = nullptr;
+
+static AuthService* authService = nullptr;
+static GroupService* groupService = nullptr;
+static FileService* fileService = nullptr;
+
+static void initCoreOnce() {
+    if (coreInitialized) return;
+
+    authManager = new AuthManager(DataPaths::usersDb());
+    groupManager = new GroupManager(DataPaths::groupsDb());
+    fsManager = new FileSystemManager(DataPaths::groupsDir());
+    permissionChecker = new PermissionChecker(*groupManager);
+    logger = new Logger("data/server.log");
+
+    authService = new AuthService(*authManager);
+    groupService = new GroupService(*groupManager);
+    fileService = new FileService(*fsManager, *permissionChecker);
+
+    coreInitialized = true;
 }
 
-Server::~Server() {
-    close(listen_fd);
-    close(epoll_fd);
+// ================== UTILS ==================
+
+static void setNonBlocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-void Server::setup_socket() {
+// ================== SERVER ==================
+
+Server::Server(int port) {
+    initCoreOnce();
+    setupSocket(port);
+    setupEpoll();
+}
+
+void Server::setupSocket(int port) {
     listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    int opt = 1;
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
 
     bind(listen_fd, (sockaddr*)&addr, sizeof(addr));
-    listen(listen_fd, 16);
+    listen(listen_fd, SOMAXCONN);
 
+    setNonBlocking(listen_fd);
+}
+
+void Server::setupEpoll() {
     epoll_fd = epoll_create1(0);
 
     epoll_event ev{};
@@ -44,63 +96,295 @@ void Server::setup_socket() {
 }
 
 void Server::run() {
-    epoll_event events[32];
-    logger.info("Server started");
+    epoll_event events[64];
 
     while (true) {
-        int n = epoll_wait(epoll_fd, events, 32, -1);
+        int n = epoll_wait(epoll_fd, events, 64, -1);
         for (int i = 0; i < n; ++i) {
             int fd = events[i].data.fd;
-            if (fd == listen_fd)
-                handle_accept();
-            else
-                handle_client(fd);
+
+            if (fd == listen_fd) {
+                acceptClient();
+            } else {
+                handleClientEvent(fd);
+            }
         }
     }
 }
 
-void Server::handle_accept() {
-    int fd = accept(listen_fd, nullptr, nullptr);
+// ================== ACCEPT / EVENT ==================
+
+void Server::acceptClient() {
+    int client_fd = accept(listen_fd, nullptr, nullptr);
+    if (client_fd < 0) return;
+
+    setNonBlocking(client_fd);
 
     epoll_event ev{};
     ev.events = EPOLLIN;
-    ev.data.fd = fd;
-    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev);
+    ev.data.fd = client_fd;
+    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev);
 
-    sessionManager.add_session(fd);
-    logger.info("Client connected fd=" + std::to_string(fd));
+    sessionManager.addSession(client_fd);
 }
 
-void Server::handle_client(int fd) {
-    uint8_t buf[4096];
-    int n = recv(fd, buf, sizeof(buf), 0);
+void Server::handleClientEvent(int fd) {
+    ClientSession* session = sessionManager.getSession(fd);
+    if (!session) return;
 
-    if (n <= 0) {
-        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
-        sessionManager.remove_session(fd);
-        logger.info("Client disconnected fd=" + std::to_string(fd));
+    try {
+        if (session->state == RecvState::READ_HEADER) {
+            recvHeader(*session);
+        } else if (session->state == RecvState::READ_PAYLOAD) {
+            recvPayload(*session);
+        }
+    } catch (...) {
+        sessionManager.removeSession(fd);
+    }
+}
+
+// ================== RECV ==================
+
+void Server::recvHeader(ClientSession& session) {
+    ssize_t n = recv(session.fd,
+                     &session.currentHeader,
+                     sizeof(PacketHeader),
+                     0);
+    if (n <= 0)
+        throw std::runtime_error("disconnect");
+
+    session.payloadBuffer.clear();
+    session.payloadBuffer = ByteBuffer(session.currentHeader.length);
+    session.state = RecvState::READ_PAYLOAD;
+}
+
+void Server::recvPayload(ClientSession& session) {
+    size_t need =
+        session.currentHeader.length - session.payloadBuffer.size();
+
+    char buf[4096];
+    ssize_t n = recv(session.fd,
+                     buf,
+                     std::min(sizeof(buf), need),
+                     0);
+
+    if (n <= 0)
+        throw std::runtime_error("disconnect");
+
+    session.payloadBuffer.append(buf, n);
+
+    if (session.payloadBuffer.size() ==
+        session.currentHeader.length) {
+        dispatchPacket(session);
+        session.state = RecvState::READ_HEADER;
+    }
+}
+
+// ================== DISPATCH ==================
+
+void Server::dispatchPacket(ClientSession& session) {
+    PacketType type =
+        static_cast<PacketType>(session.currentHeader.type);
+
+    ByteBuffer& buf = session.payloadBuffer;
+
+    // ===== AUTH =====
+    if (type == PacketType::AUTH_REGISTER_REQ) {
+        RegisterRequest req;
+        req.deserialize(buf);
+        authService->registerUser(req.username, req.password);
         return;
     }
 
-    ClientSession* sess = sessionManager.get_session(fd);
-    sess->buffer.append(buf, n);
+    if (type == PacketType::AUTH_LOGIN_REQ) {
+        LoginRequest req;
+        req.deserialize(buf);
 
-    PacketHeader h;
-    std::vector<uint8_t> payload;
+        bool ok = authService->login(req.username, req.password);
 
-    while (try_parse_packet(sess->buffer, h, payload)) {
-        handle_packet(fd, h, payload);
+        ActionResultResponse res;
+        res.ok = ok ? 1 : 0;
+
+        if (ok) {
+            session.logged_in = true;
+            session.username = req.username;
+            res.message = "Login success";
+        } else {    
+            session.logged_in = false;
+            res.message = "Invalid username or password";
+        }
+
+        ByteBuffer out;
+        res.serialize(out);
+
+        PacketHeader hdr{};
+        hdr.type = (uint16_t)PacketType::AUTH_ACTION_RES;
+        hdr.length = out.size();
+        hdr.seq = 0;
+        hdr.checksum = 0;
+
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        send(session.fd, out.data(), out.size(), 0);
+        return;
+    }
+
+    if (!session.logged_in) return;
+
+    // ===== GROUP =====
+    if (type == PacketType::GROUP_CREATE_REQ) {
+        CreateGroupRequest req;
+        req.deserialize(buf);
+        groupService->createGroup(session.username, req.groupName);
+        logger->log("CREATE_GROUP " + req.groupName);
+        return;
+    }
+
+    if (type == PacketType::GROUP_JOIN_REQ) {
+        JoinGroupRequest req;
+        req.deserialize(buf);
+        groupService->requestJoin(session.username, req.groupName);
+        logger->log("JOIN_GROUP " + req.groupName);
+        return;
+    }
+
+    if (type == PacketType::GROUP_APPROVE_REQ) {
+    ApproveJoinRequest req;
+    req.deserialize(buf);
+
+    auto result = groupService->approveJoin(
+        req.groupName,
+        session.username,
+        req.username
+    );
+
+    ActionResultResponse res{
+    result.ok ? 1 : 0,
+    result.message
+    };
+
+    ByteBuffer out;
+    res.serialize(out);
+    PacketHeader hdr{};
+
+    hdr.type = static_cast<uint16_t>(PacketType::GROUP_ACTION_RES);
+    hdr.length = out.size();
+    hdr.seq = 0;
+    hdr.checksum = 0;
+
+    send(session.fd, &hdr, sizeof(hdr), 0);
+    if (out.size() > 0) {
+        send(session.fd, out.data(), out.size(), 0);
+    }
+
+    if (type == PacketType::GROUP_REJECT_JOIN_REQ) {
+    RejectJoinRequest req;
+    req.deserialize(buf);
+
+    auto res = groupService->rejectJoin(
+        req.groupName,
+        session.username,
+        req.username
+    );
+
+    ActionResultResponse out{res.ok ? 1 : 0, res.message};
+
+    ByteBuffer outBuf;
+    out.serialize(outBuf);
+
+    PacketHeader hdr{};
+    hdr.type = (uint16_t)PacketType::GROUP_ACTION_RES;
+    hdr.length = outBuf.size();
+
+    send(session.fd, &hdr, sizeof(hdr), 0);
+    send(session.fd, outBuf.data(), outBuf.size(), 0);
+    return;
+}
+
+    if (type == PacketType::GROUP_INVITE_REQ) {
+        InviteUserRequest req;
+        req.deserialize(buf);
+        groupService->inviteUser(session.username,
+                                 req.username,
+                                 req.groupName);
+        logger->log("INVITE_USER " + req.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LEAVE_REQ) {
+        LeaveGroupRequest req;
+        req.deserialize(buf);
+        groupService->leaveGroup(session.username, req.groupName);
+        logger->log("LEAVE_GROUP " + req.groupName);
+        return;
+    }
+
+    if (type == PacketType::GROUP_KICK_REQ) {
+        KickMemberRequest req;
+        req.deserialize(buf);
+        groupService->kickUser(session.username,
+                               req.username,
+                               req.groupName);
+        logger->log("KICK_MEMBER " + req.username);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LIST_MEMBERS_REQ) {
+        ListMembersRequest req;
+        req.deserialize(buf);
+        auto members =
+            groupService->listMembers(session.username,
+                                      req.groupName);
+
+        ListMembersResponse res{members};
+        ByteBuffer outBuf;
+        res.serialize(outBuf);
+
+        PacketHeader hdr{};
+        hdr.type = static_cast<uint16_t>(
+            PacketType::GROUP_LIST_MEMBERS_RES);
+        hdr.length = outBuf.size();
+
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        send(session.fd, outBuf.data(), outBuf.size(), 0);
+        return;
+    }
+
+    if (type == PacketType::GROUP_LIST_REQ) {
+        ListGroupsResponse res;
+        res.ownedGroups =
+            groupService->listOwnedGroups(session.username);
+        res.joinedGroups =
+            groupService->listJoinedGroups(session.username);
+
+        ByteBuffer outBuf;
+        res.serialize(outBuf);
+
+        PacketHeader hdr{};
+        hdr.type =
+            static_cast<uint16_t>(PacketType::GROUP_LIST_RES);
+        hdr.length = outBuf.size();
+
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        send(session.fd, outBuf.data(), outBuf.size(), 0);
+        return;
+    }
+    
+    // ===== FILE =====
+    if (type == PacketType::FILE_LIST_REQ) {
+        fileService->list(session.username,
+                          session.current_group,
+                          ".");
+        return;
+    }
+
+    if (type == PacketType::FILE_MKDIR_REQ) {
+        logger->log("MKDIR");
+        return;
+    }
+
+    if (type == PacketType::FILE_DELETE_REQ) {
+        logger->log("DELETE");
+        return;
     }
 }
-
-void Server::send_ok(int fd, const std::string& msg) {
-    std::vector<uint8_t> data(msg.begin(), msg.end());
-    auto pkt = make_packet(PacketType::OK, 0, 0, data);
-    send(fd, pkt.data(), pkt.size(), 0);
-}
-
-void Server::send_error(int fd, const std::string& msg) {
-    std::vector<uint8_t> data(msg.begin(), msg.end());
-    auto pkt = make_packet(PacketType::ERROR, FLAG_ERR, 0, data);
-    send(fd, pkt.data(), pkt.size(), 0);
 }

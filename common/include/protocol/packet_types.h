@@ -1,43 +1,53 @@
 #pragma once
 #include <cstdint>
 
-/*
- * Định nghĩa các loại packet trong giao thức
- * FE & BE dùng chung
- */
 enum class PacketType : uint16_t {
-    // Auth
-    REGISTER = 1,
-    LOGIN    = 2,
-    LOGOUT   = 3,
+    // ===== AUTH =====
+    AUTH_REGISTER_REQ = 1,
+    AUTH_REGISTER_RES,
+    AUTH_LOGIN_REQ,
+    AUTH_LOGIN_RES,
+    AUTH_ACTION_RES = 3,
 
-    // Group
-    CREATE_GROUP = 10,
-    LIST_GROUPS  = 11,
-    JOIN_GROUP_REQUEST = 12,
-    APPROVE_JOIN = 13,
-    INVITE_MEMBER = 14,
-    LEAVE_GROUP = 15,
-    KICK_MEMBER = 16,
-    LIST_MEMBERS = 17,
+    // ===== GROUP =====
+    GROUP_CREATE_REQ,
+    GROUP_CREATE_RES,
+    GROUP_JOIN_REQ,
+    ROUP_JOIN_RES,
+    GROUP_APPROVE_REQ,
+    GROUP_APPROVE_RES,
+    GROUP_INVITE_REQ,
+    GROUP_INVITE_RES,
+    GROUP_ACCEPT_INVITE_REQ,
+    GROUP_ACCEPT_INVITE_RES,
+    GROUP_LEAVE_REQ,
+    GROUP_LEAVE_RES,
+    GROUP_KICK_REQ,
+    GROUP_KICK_RES,
+    GROUP_LIST_MEMBERS_REQ,
+    GROUP_LIST_MEMBERS_RES,
+    GROUP_LIST_REQ,
+    GROUP_LIST_RES,
+    GROUP_REJECT_REQ = 0x0206,
+    GROUP_ACTION_RES = 300,
+    GROUP_REJECT_JOIN_REQ,
 
-    // File / Dir
-    LIST_DIR = 30,
-    MKDIR    = 31,
-    RENAME   = 32,
-    DELETE_  = 33,
-    MOVE     = 34,
-    COPY     = 35,
 
-    // Transfer
-    UPLOAD_REQUEST   = 50,
-    UPLOAD_CHUNK     = 51,
-    UPLOAD_FINISH    = 52,
-    DOWNLOAD_REQUEST = 53,
-    DOWNLOAD_CHUNK   = 54,
-    DOWNLOAD_FINISH  = 55,
 
-    // Control
-    OK    = 200,
-    ERROR = 201
+    // ===== FILE SYSTEM =====
+    FILE_LIST_REQ,
+    FILE_LIST_RES,
+
+    FILE_MKDIR_REQ,
+    FILE_MKDIR_RES,
+
+    FILE_DELETE_REQ,
+    FILE_DELETE_RES,
+
+    // ===== FILE TRANSFER =====
+    FILE_UPLOAD_REQ,
+    FILE_UPLOAD_RES,
+
+    FILE_DOWNLOAD_REQ,
+    FILE_DOWNLOAD_RES
 };

@@ -1,20 +1,70 @@
 #include "client/AuthClient.h"
-#include "client/Client.h"
+#include "protocol/packets.h"
+#include "protocol/packet_types.h"
 #include <iostream>
 
 AuthClient::AuthClient(Client& c) : client(c) {}
 
-bool AuthClient::handle(const std::string& cmd) {
-    if (cmd.starts_with("register ")) {
-        client.send_packet(PacketType::REGISTER, cmd.substr(9));
-        return true;
-    }
+bool AuthClient::registerUser() {
+    std::string u, p;
+    std::cout << "Username: ";
+    std::cin >> u;
+    std::cout << "Password: ";
+    std::cin >> p;
 
-    if (cmd.starts_with("login ")) {
-        client.send_packet(PacketType::LOGIN, cmd.substr(6));
-        client.session().logged_in = true;
-        return true;
-    }
+    RegisterRequest req{u, p};
+    ByteBuffer buf;
+    req.serialize(buf);
 
-    return false;
+    client.sendPacket(
+        (uint16_t)PacketType::AUTH_REGISTER_REQ, buf);
+
+    std::cout << "Register success\n";
+    return true;
 }
+
+bool AuthClient::loginUser(bool& loggedIn) {
+    std::string u, p;
+    std::cout << "Username: ";
+    std::cin >> u;
+    std::cout << "Password: ";
+    std::cin >> p;
+
+    LoginRequest req{u, p};
+    ByteBuffer buf;
+    req.serialize(buf);
+
+    client.sendPacket(
+        (uint16_t)PacketType::AUTH_LOGIN_REQ, buf);
+
+    // ===== ĐỌC RESPONSE =====
+    PacketHeader hdr;
+    ByteBuffer payload;
+
+    if (!client.recvPacket(hdr, payload)) {
+        std::cout << "Server disconnected\n";
+        loggedIn = false;
+        return false;
+    }
+
+    if (hdr.type != (uint16_t)PacketType::AUTH_ACTION_RES) {
+        std::cout << "Protocol error\n";
+        loggedIn = false;
+        return false;
+    }
+
+    ActionResultResponse res;
+    res.deserialize(payload);
+
+    if (res.ok) {
+        loggedIn = true;
+        std::cout << res.message << "\n";
+        return true;
+    } else {
+        loggedIn = false;
+        std::cout << "Login failed: " << res.message << "\n";
+        return false;
+    }
+}
+
+

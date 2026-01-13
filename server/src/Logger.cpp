@@ -1,39 +1,32 @@
 #include "server/Logger.h"
-#include <chrono>
+#include <fstream>
+#include <iostream>
 #include <ctime>
 
-Logger::Logger(const std::string& file) {
-    ofs.open(file, std::ios::app);
+static std::string now() {
+    std::time_t t = std::time(nullptr);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%F %T", std::localtime(&t));
+    return buf;
 }
 
-void Logger::log(LogLevel level, const std::string& msg) {
-    std::lock_guard<std::mutex> lock(mtx);
+// ===== EXISTING IMPLEMENTATION =====
+Logger::Logger(const std::string& path) : logPath(path) {}
 
-    auto now = std::chrono::system_clock::to_time_t(
-        std::chrono::system_clock::now());
-
-    ofs << std::ctime(&now)
-        << "[" << level_to_string(level) << "] "
-        << msg << "\n";
+void Logger::log(const std::string& msg) {
+    std::ofstream ofs(logPath, std::ios::app);
+    ofs << "[" << now() << "] " << msg << "\n";
 }
 
+// ===== FOUNDATION STATIC LOG =====
 void Logger::info(const std::string& msg) {
-    log(LogLevel::INFO, msg);
+    std::cout << "[INFO][" << now() << "] " << msg << "\n";
 }
 
 void Logger::warn(const std::string& msg) {
-    log(LogLevel::WARN, msg);
+    std::cout << "[WARN][" << now() << "] " << msg << "\n";
 }
 
 void Logger::error(const std::string& msg) {
-    log(LogLevel::ERROR, msg);
-}
-
-std::string Logger::level_to_string(LogLevel level) {
-    switch (level) {
-        case LogLevel::INFO:  return "INFO";
-        case LogLevel::WARN:  return "WARN";
-        case LogLevel::ERROR: return "ERROR";
-    }
-    return "UNKNOWN";
+    std::cerr << "[ERROR][" << now() << "] " << msg << "\n";
 }
