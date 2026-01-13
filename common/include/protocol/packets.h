@@ -42,6 +42,21 @@ struct ApproveJoinRequest {
     void deserialize(ByteBuffer& buf);
 };
 
+struct RejectJoinRequest {
+    std::string groupName;
+    std::string username;
+
+    void serialize(ByteBuffer& buf) const {
+        buf.writeString(groupName);
+        buf.writeString(username);
+    }
+
+    void deserialize(ByteBuffer& buf) {
+        groupName = buf.readString();
+        username = buf.readString();
+    }
+};
+
 struct InviteUserRequest {
     std::string groupName;
     std::string username;
@@ -93,8 +108,20 @@ struct ListGroupsResponse {
     void deserialize(ByteBuffer& buf);
 };
 
+struct ActionResultResponse {
+    uint8_t ok;          // 1 = success, 0 = fail
+    std::string message;
 
+    void serialize(ByteBuffer& buf) const {
+        buf.write<uint8_t>(ok);
+        buf.writeString(message);
+    }
 
+    void deserialize(ByteBuffer& buf) {
+        ok = buf.read<uint8_t>();
+        message = buf.readString();
+    }
+};
 
 // ===== FILE CONTROL =====
 struct UploadFileRequest {

@@ -31,7 +31,7 @@ AuthResult AuthManager::registerUser(const std::string& user,
         return AuthResult::USER_EXISTS;
 
     users[user] = pass;
-    saveToFile();              // 🔥 ghi file thật
+    saveToFile();              //  ghi file thật
     return AuthResult::SUCCESS;
 }
 

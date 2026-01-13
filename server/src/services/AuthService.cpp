@@ -4,14 +4,18 @@
 AuthService::AuthService(AuthManager& auth)
     : authManager(auth) {}
 
+// ================= REGISTER =================
 bool AuthService::registerUser(const std::string& user,
                                const std::string& password) {
-    authManager.registerUser(user, password);
-    return true;
+    AuthResult res = authManager.registerUser(user, password);
+
+    return res == AuthResult::SUCCESS;
 }
 
+// ================= LOGIN =================
 bool AuthService::login(const std::string& user,
                         const std::string& password) {
-    return authManager.verifyLogin(user, password)
-           == AuthResult::SUCCESS;
+    AuthResult res = authManager.verifyLogin(user, password);
+
+    return res == AuthResult::SUCCESS;
 }

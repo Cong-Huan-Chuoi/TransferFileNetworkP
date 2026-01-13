@@ -37,7 +37,34 @@ bool AuthClient::loginUser(bool& loggedIn) {
     client.sendPacket(
         (uint16_t)PacketType::AUTH_LOGIN_REQ, buf);
 
-    loggedIn = true;
-    std::cout << "Login success\n";
-    return true;
+    // ===== ĐỌC RESPONSE =====
+    PacketHeader hdr;
+    ByteBuffer payload;
+
+    if (!client.recvPacket(hdr, payload)) {
+        std::cout << "Server disconnected\n";
+        loggedIn = false;
+        return false;
+    }
+
+    if (hdr.type != (uint16_t)PacketType::AUTH_ACTION_RES) {
+        std::cout << "Protocol error\n";
+        loggedIn = false;
+        return false;
+    }
+
+    ActionResultResponse res;
+    res.deserialize(payload);
+
+    if (res.ok) {
+        loggedIn = true;
+        std::cout << res.message << "\n";
+        return true;
+    } else {
+        loggedIn = false;
+        std::cout << "Login failed: " << res.message << "\n";
+        return false;
+    }
 }
+
+

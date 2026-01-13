@@ -7,6 +7,7 @@ enum class PacketType : uint16_t {
     AUTH_REGISTER_RES,
     AUTH_LOGIN_REQ,
     AUTH_LOGIN_RES,
+    AUTH_ACTION_RES = 3,
 
     // ===== GROUP =====
     GROUP_CREATE_REQ,
@@ -27,6 +28,10 @@ enum class PacketType : uint16_t {
     GROUP_LIST_MEMBERS_RES,
     GROUP_LIST_REQ,
     GROUP_LIST_RES,
+    GROUP_REJECT_REQ = 0x0206,
+    GROUP_ACTION_RES = 300,
+    GROUP_REJECT_JOIN_REQ,
+
 
 
     // ===== FILE SYSTEM =====

@@ -199,10 +199,32 @@ void Server::dispatchPacket(ClientSession& session) {
     if (type == PacketType::AUTH_LOGIN_REQ) {
         LoginRequest req;
         req.deserialize(buf);
-        if (authService->login(req.username, req.password)) {
+
+        bool ok = authService->login(req.username, req.password);
+
+        ActionResultResponse res;
+        res.ok = ok ? 1 : 0;
+
+        if (ok) {
             session.logged_in = true;
             session.username = req.username;
+            res.message = "Login success";
+        } else {    
+            session.logged_in = false;
+            res.message = "Invalid username or password";
         }
+
+        ByteBuffer out;
+        res.serialize(out);
+
+        PacketHeader hdr{};
+        hdr.type = (uint16_t)PacketType::AUTH_ACTION_RES;
+        hdr.length = out.size();
+        hdr.seq = 0;
+        hdr.checksum = 0;
+
+        send(session.fd, &hdr, sizeof(hdr), 0);
+        send(session.fd, out.data(), out.size(), 0);
         return;
     }
 
@@ -226,14 +248,57 @@ void Server::dispatchPacket(ClientSession& session) {
     }
 
     if (type == PacketType::GROUP_APPROVE_REQ) {
-        ApproveJoinRequest req;
-        req.deserialize(buf);
-        groupService->approveJoin(session.username,
-                                  req.username,
-                                  req.groupName);
-        logger->log("APPROVE_JOIN " + req.groupName);
-        return;
+    ApproveJoinRequest req;
+    req.deserialize(buf);
+
+    auto result = groupService->approveJoin(
+        req.groupName,
+        session.username,
+        req.username
+    );
+
+    ActionResultResponse res{
+    result.ok ? 1 : 0,
+    result.message
+    };
+
+    ByteBuffer out;
+    res.serialize(out);
+    PacketHeader hdr{};
+
+    hdr.type = static_cast<uint16_t>(PacketType::GROUP_ACTION_RES);
+    hdr.length = out.size();
+    hdr.seq = 0;
+    hdr.checksum = 0;
+
+    send(session.fd, &hdr, sizeof(hdr), 0);
+    if (out.size() > 0) {
+        send(session.fd, out.data(), out.size(), 0);
     }
+
+    if (type == PacketType::GROUP_REJECT_JOIN_REQ) {
+    RejectJoinRequest req;
+    req.deserialize(buf);
+
+    auto res = groupService->rejectJoin(
+        req.groupName,
+        session.username,
+        req.username
+    );
+
+    ActionResultResponse out{res.ok ? 1 : 0, res.message};
+
+    ByteBuffer outBuf;
+    out.serialize(outBuf);
+
+    PacketHeader hdr{};
+    hdr.type = (uint16_t)PacketType::GROUP_ACTION_RES;
+    hdr.length = outBuf.size();
+
+    send(session.fd, &hdr, sizeof(hdr), 0);
+    send(session.fd, outBuf.data(), outBuf.size(), 0);
+    return;
+}
 
     if (type == PacketType::GROUP_INVITE_REQ) {
         InviteUserRequest req;
@@ -303,7 +368,7 @@ void Server::dispatchPacket(ClientSession& session) {
         send(session.fd, outBuf.data(), outBuf.size(), 0);
         return;
     }
-
+    
     // ===== FILE =====
     if (type == PacketType::FILE_LIST_REQ) {
         fileService->list(session.username,
@@ -321,4 +386,5 @@ void Server::dispatchPacket(ClientSession& session) {
         logger->log("DELETE");
         return;
     }
+}
 }
