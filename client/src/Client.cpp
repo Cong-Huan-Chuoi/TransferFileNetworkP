@@ -1,10 +1,17 @@
 #include "client/Client.h"
+
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <cerrno>
+#include <cstdio>
+#include <iostream>
 
 Client::Client(const std::string& h, int p)
-    : host(h), port(p), sockfd(-1) {}
+: host(h), port(p), sockfd(-1) {
+    // DEBUG: kích thước PacketHeader (đảm bảo packing giống server)
+    std::cout << "[Client] sizeof(PacketHeader)=" << sizeof(PacketHeader) << "\n";
+}
 
 Client::~Client() {
     if (sockfd >= 0) close(sockfd);
@@ -23,22 +30,62 @@ bool Client::connectToServer() {
 }
 
 bool Client::sendPacket(uint16_t type, ByteBuffer& payload) {
+    // Serialize header to network order
     PacketHeader h{};
-    h.type = type;
-    h.length = payload.size();
-    h.seq = 0;
-    h.checksum = 0;
+    h.type     = htons(type);
+    h.length   = htonl(static_cast<uint32_t>(payload.size()));
+    h.seq      = htonl(0);
+    h.checksum = htonl(0);
 
-    if (send(sockfd, &h, sizeof(h), 0) <= 0) return false;
-    if (payload.size() > 0)
-        if (send(sockfd, payload.data(), payload.size(), 0) <= 0)
+    // DEBUG: raw header bytes trước khi gửi
+    {
+        unsigned char* p = reinterpret_cast<unsigned char*>(&h);
+        std::cout << "[Client] raw header:";
+        for (size_t i = 0; i < sizeof(h); ++i) printf(" %02x", p[i]);
+        std::cout << "\n";
+    }
+
+    if (send(sockfd, &h, sizeof(h), 0) <= 0) {
+        perror("[Client] send header failed");
+        return false;
+    }
+
+    // DEBUG: logical values (host order)
+    std::cout << "[Client] sendPacket: type=" << type << " length=" << payload.size() << "\n";
+
+    if (payload.size() > 0) {
+        if (send(sockfd, payload.data(), payload.size(), 0) <= 0) {
+            perror("[Client] send payload failed");
             return false;
+        }
+    }
     return true;
 }
 
 bool Client::recvPacket(PacketHeader& h, ByteBuffer& payload) {
-    if (recv(sockfd, &h, sizeof(h), MSG_WAITALL) <= 0)
+    PacketHeader hdr_raw;
+    ssize_t n = recv(sockfd, &hdr_raw, sizeof(hdr_raw), MSG_WAITALL);
+    if (n <= 0) {
+        perror("[Client] recv header error");
         return false;
+    }
+
+    // DEBUG: raw header bytes khi nhận
+    {
+        unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_raw);
+        std::cout << "[Client] raw header:";
+        for (size_t i = 0; i < sizeof(hdr_raw); ++i) printf(" %02x", p[i]);
+        std::cout << "\n";
+    }
+
+    // Convert về host order
+    h.type     = ntohs(hdr_raw.type);
+    h.length   = ntohl(hdr_raw.length);
+    h.seq      = ntohl(hdr_raw.seq);
+    h.checksum = ntohl(hdr_raw.checksum);
+
+    // DEBUG: giá trị đã parse (host order)
+    std::cout << "[Client] recvPacket: got header type=" << h.type << " length=" << h.length << "\n";
 
     payload.clear();
     payload = ByteBuffer(h.length);
@@ -47,11 +94,13 @@ bool Client::recvPacket(PacketHeader& h, ByteBuffer& payload) {
         char buf[4096];
         size_t received = 0;
         while (received < h.length) {
-            ssize_t n = recv(sockfd, buf,
-                std::min(sizeof(buf), h.length - received), 0);
-            if (n <= 0) return false;
-            payload.append(buf, n);
-            received += n;
+            ssize_t m = recv(sockfd, buf, std::min(sizeof(buf), h.length - received), 0);
+            if (m <= 0) {
+                perror("[Client] recv payload error");
+                return false;
+            }
+            payload.append(buf, m);
+            received += m;
         }
     }
     return true;

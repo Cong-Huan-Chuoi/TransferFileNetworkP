@@ -51,6 +51,13 @@ public:
         readPos += len;
         return str;
     }
+    void writeBool(bool value) {
+    write<uint8_t>(value ? 1 : 0);
+    }
+    bool readBool() {
+    return read<uint8_t>() != 0;
+    }
+
 
     // ===== UTIL =====
     void clear() {

@@ -1,7 +1,9 @@
 #include "server/GroupManager.h"
+
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+
 
 
 GroupManager::GroupManager(const std::string& path)
@@ -92,22 +94,25 @@ void GroupManager::saveGroups(
     }
 }
 
-bool GroupManager::createGroup(const std::string& groupName,
-                               const std::string& owner) {
-    std::lock_guard<std::mutex> lock(dbMutex);
-    auto groups = loadGroups();
+// GroupManager.cpp (sửa createGroup)
+bool GroupManager::createGroup(const std::string& groupName, const std::string& owner) {
+  std::lock_guard<std::mutex> lock(dbMutex);
+  auto groups = loadGroups();
+  if (groups.count(groupName)) return false;
 
-    if (groups.count(groupName)) return false;
+  Group g;
+  g.name = groupName;
+  g.owner = owner;
+  g.members.push_back(owner);
+  groups[groupName] = g;
+  saveGroups(groups);
 
-    Group g;
-    g.name = groupName;
-    g.owner = owner;
-    g.members.push_back(owner);
+  // tạo thư mục nhóm (an toàn: defer logic sang server nơi có baseDir)
+  // -> phần này mình sẽ thực hiện trong Server.cpp sau khi createGroup trả true
 
-    groups[groupName] = g;
-    saveGroups(groups);
-    return true;
+  return true;
 }
+
 
 std::vector<std::string> GroupManager::listGroups() {
     std::lock_guard<std::mutex> lock(dbMutex);

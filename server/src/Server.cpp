@@ -17,8 +17,12 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
-
+#include <filesystem>
+#include <fstream>
+#include <unordered_map>
 #include "server/DataPaths.h"
+
+namespace fs = std::filesystem;
 
 // ================== GLOBAL MANAGERS ==================
 
@@ -26,7 +30,7 @@ static AuthManager authManager(DataPaths::usersDb());
 static GroupManager groupManager(DataPaths::groupsDb());
 static PermissionChecker permissionChecker(groupManager);
 static FileSystemManager fsManager(DataPaths::groupsDir());
-static Logger logger("data/server.log");
+static Logger logger((std::filesystem::path(DataPaths::dataDir()) / "server.log").string());
 
 // ================== UTILS ==================
 
@@ -40,6 +44,8 @@ static void setNonBlocking(int fd) {
 Server::Server(int port) {
     setupSocket(port);
     setupEpoll();
+    // DEBUG: kích thước PacketHeader (đảm bảo packing giống client)
+    std::cout << "[Server] sizeof(PacketHeader)=" << sizeof(PacketHeader) << "\n";
 }
 
 void Server::setupSocket(int port) {
@@ -119,35 +125,54 @@ void Server::handleClientEvent(int fd) {
 // ================== RECV ==================
 
 void Server::recvHeader(ClientSession& session) {
-    ssize_t n = recv(session.fd,
-                     &session.currentHeader,
-                     sizeof(PacketHeader),
-                     0);
+    PacketHeader hdr_raw;
+    ssize_t n = recv(session.fd, &hdr_raw, sizeof(hdr_raw), 0);
     if (n <= 0)
         throw std::runtime_error("disconnect");
 
+    // DEBUG: in raw header bytes (network order)
+    {
+        unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_raw);
+        std::cout << "[Server] raw header:";
+        for (size_t i = 0; i < sizeof(hdr_raw); ++i) printf(" %02x", p[i]);
+        std::cout << "\n";
+    }
+
+    // network → host
+    PacketHeader hdr;
+    hdr.type     = ntohs(hdr_raw.type);
+    hdr.length   = ntohl(hdr_raw.length);
+    hdr.seq      = ntohl(hdr_raw.seq);
+    hdr.checksum = ntohl(hdr_raw.checksum);
+
+    session.currentHeader = hdr;
+
+    // FIX: nếu không có payload, dispatch ngay
+    if (hdr.length == 0) {
+        session.payloadBuffer.clear();
+        std::cout << "[Server] dispatch immediately (length=0)\n"; // DEBUG
+        dispatchPacket(session);
+        session.state = RecvState::READ_HEADER;
+        return;
+    }
+
+    // Có payload → chuẩn bị buffer
     session.payloadBuffer.clear();
-    session.payloadBuffer = ByteBuffer(session.currentHeader.length);
+    session.payloadBuffer = ByteBuffer(hdr.length);
     session.state = RecvState::READ_PAYLOAD;
 }
 
 void Server::recvPayload(ClientSession& session) {
-    size_t need =
-        session.currentHeader.length - session.payloadBuffer.size();
+    size_t need = session.currentHeader.length - session.payloadBuffer.size();
 
     char buf[4096];
-    ssize_t n = recv(session.fd,
-                     buf,
-                     std::min(sizeof(buf), need),
-                     0);
-
+    ssize_t n = recv(session.fd, buf, std::min(sizeof(buf), need), 0);
     if (n <= 0)
         throw std::runtime_error("disconnect");
 
     session.payloadBuffer.append(buf, n);
 
-    if (session.payloadBuffer.size() ==
-        session.currentHeader.length) {
+    if (session.payloadBuffer.size() == session.currentHeader.length) {
         dispatchPacket(session);
         session.state = RecvState::READ_HEADER;
     }
@@ -156,34 +181,68 @@ void Server::recvPayload(ClientSession& session) {
 // ================== DISPATCH ==================
 
 void Server::dispatchPacket(ClientSession& session) {
-    PacketType type =
-        static_cast<PacketType>(session.currentHeader.type);
-
+    PacketType type = static_cast<PacketType>(session.currentHeader.type);
     ByteBuffer& buf = session.payloadBuffer;
+
+    // DEBUG: in thông tin packet đã parse (host order)
+    std::cout << "[Server] dispatchPacket: fd=" << session.fd
+              << " type=" << static_cast<int>(session.currentHeader.type)
+              << " length=" << session.currentHeader.length
+              << " username=" << session.username
+              << " logged_in=" << (session.logged_in ? "1" : "0") << "\n";
+    logger.log("DISPATCH fd=" + std::to_string(session.fd)
+               + " type=" + std::to_string(session.currentHeader.type)
+               + " user=" + session.username
+               + " logged_in=" + (session.logged_in ? "1" : "0"));
 
     // ===== AUTH =====
     if (type == PacketType::AUTH_REGISTER_REQ) {
-    RegisterRequest req;
-    req.deserialize(buf);
-
-    authManager.registerUser(req.username, req.password);
-    return;
-}
+        RegisterRequest req;
+        req.deserialize(buf);
+        authManager.registerUser(req.username, req.password);
+        return;
+    }
 
     if (type == PacketType::AUTH_LOGIN_REQ) {
-    LoginRequest req;
-    req.deserialize(buf);
+        LoginRequest req;
+        req.deserialize(buf);
 
-    AuthResult res =
-        authManager.verifyLogin(req.username, req.password);
+        AuthResult result = authManager.verifyLogin(req.username, req.password);
+        bool ok = (result == AuthResult::SUCCESS);
 
-    if (res == AuthResult::SUCCESS) {
-        session.logged_in = true;
-        session.username = req.username;
+        if (ok) {
+            session.logged_in = true;
+            session.username = req.username;
+        }
+
+        AuthLoginResponse resPkt;
+        resPkt.success = ok;
+        resPkt.message = ok ? "Login success" : "Login failed";
+
+        ByteBuffer out;
+        resPkt.serialize(out);
+
+        // Gửi header ở network order
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::AUTH_LOGIN_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG: raw header sẽ gửi
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+
+        logger.log("LOGIN " + req.username + " result: " + (ok ? "SUCCESS" : "FAIL"));
+        return;
     }
-    return;
-}
-
 
     // ===== REQUIRE LOGIN =====
     if (!session.logged_in) {
@@ -192,32 +251,17 @@ void Server::dispatchPacket(ClientSession& session) {
 
     // ===== GROUP =====
     if (type == PacketType::GROUP_CREATE_REQ) {
-        CreateGroupRequest req;
-        req.deserialize(buf);
-
-        groupManager.createGroup(req.groupName,
-                                 session.username);
-        logger.log("CREATE_GROUP " + req.groupName +
-                   " by " + session.username);
-        return;
-    }
-
-    if (type == PacketType::GROUP_JOIN_REQ) {
-        JoinGroupRequest req;
-        req.deserialize(buf);
-
-        groupManager.requestJoin(req.groupName,
-                                 session.username);
-        logger.log("JOIN_GROUP " + req.groupName +
-                   " by " + session.username);
-        return;
-    }
-    // ===== GROUP =====
-
-    if (type == PacketType::GROUP_CREATE_REQ) {
         CreateGroupRequest req; req.deserialize(buf);
-        groupManager.createGroup(req.groupName, session.username);
+        bool ok = groupManager.createGroup(req.groupName, session.username);
         logger.log("CREATE_GROUP " + req.groupName + " by " + session.username);
+
+        if (ok) {
+            try {
+                fs::create_directories(fs::path(DataPaths::groupsDir()) / req.groupName);
+            } catch (...) {
+                logger.log("CREATE_GROUP_DIR_FAIL " + req.groupName);
+            }
+        }
         return;
     }
 
@@ -267,65 +311,434 @@ void Server::dispatchPacket(ClientSession& session) {
         ListMembersRequest req; req.deserialize(buf);
         auto members = groupManager.listMembers(req.groupName);
         ListMembersResponse res{members};
+
         ByteBuffer outBuf;
         res.serialize(outBuf);
-        // gửi response về client
-        PacketHeader hdr{};
-        hdr.type = static_cast<uint16_t>(PacketType::GROUP_LIST_MEMBERS_RES);
-        hdr.length = outBuf.size();
-        hdr.seq = 0;
-        hdr.checksum = 0;
-        send(session.fd, &hdr, sizeof(hdr), 0);
-        send(session.fd, outBuf.data(), outBuf.size(), 0);
+
+        // Gửi header ở network order
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::GROUP_LIST_MEMBERS_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(outBuf.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (outBuf.size() > 0) send(session.fd, outBuf.data(), outBuf.size(), 0);
         logger.log("LIST_MEMBERS " + req.groupName + " by " + session.username);
         return;
     }
+
     if (type == PacketType::GROUP_LIST_REQ) {
-        ListGroupsResponse res;
-        res.ownedGroups = groupManager.listGroupsOwnedByUser(session.username);
-        res.joinedGroups = groupManager.listGroupsByUser(session.username);
+        try {
+            std::cout << "[Server] GROUP_LIST_REQ received\n"; // DEBUG
+            ListGroupsResponse res;
+            res.ownedGroups = groupManager.listGroupsOwnedByUser(session.username);
+            res.joinedGroups = groupManager.listGroupsByUser(session.username);
 
-        ByteBuffer outBuf;
-        res.serialize(outBuf);
+            ByteBuffer outBuf;
+            res.serialize(outBuf);
 
-        PacketHeader hdr{};
-        hdr.type = static_cast<uint16_t>(PacketType::GROUP_LIST_RES);
-        hdr.length = outBuf.size();
-        hdr.seq = 0;
-        hdr.checksum = 0;
+            PacketHeader hdr_net{};
+            hdr_net.type     = htons(static_cast<uint16_t>(PacketType::GROUP_LIST_RES));
+            hdr_net.length   = htonl(static_cast<uint32_t>(outBuf.size()));
+            hdr_net.seq      = htonl(0);
+            hdr_net.checksum = htonl(0);
 
-        send(session.fd, &hdr, sizeof(hdr), 0);
-        if (outBuf.size() > 0)
-            send(session.fd, outBuf.data(), outBuf.size(), 0);
+            // DEBUG
+            {
+                unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+                std::cout << "[Server] raw header to send:";
+                for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+                std::cout << "\n";
+            }
 
-        logger.log("LIST_GROUPS for " + session.username);
-        return;
-    }
+            send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+            if (outBuf.size() > 0) send(session.fd, outBuf.data(), outBuf.size(), 0);
 
-
-    // ===== FILE SYSTEM =====
-    if (type == PacketType::FILE_LIST_REQ) {
-        // demo: list root
-        if (permissionChecker.canPerform(
-                session.username,
-                session.current_group,
-                FileAction::LIST)) {
-
-            fsManager.list(session.current_group, ".");
-            logger.log("LIST_FILES by " + session.username);
+            logger.log("LIST_GROUPS for " + session.username);
+        } catch (...) {
+            std::cout << "[Server] unknown exception in GROUP_LIST_REQ\n";
+            logger.log("ERR LIST_GROUP_REQ: unknown");
         }
         return;
     }
 
-    if (type == PacketType::FILE_MKDIR_REQ) {
-        // demo stub
-        logger.log("MKDIR by " + session.username);
+    // ===== FILE SYSTEM =====
+    if (type == PacketType::FILE_LIST_REQ) {
+        FileListRequest req; req.deserialize(buf);
+        FileListResponse resList{};
+        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::LIST)) {
+            try {
+                auto entries = fsManager.list(req.groupName, req.path);
+                resList.entries = entries;
+                ByteBuffer out;
+                resList.serialize(out);
+
+                PacketHeader hdr_net{};
+                hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_LIST_RES));
+                hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+                hdr_net.seq      = htonl(0);
+                hdr_net.checksum = htonl(0);
+
+                // DEBUG
+                {
+                    unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+                    std::cout << "[Server] raw header to send:";
+                    for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+                    std::cout << "\n";
+                }
+
+                send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+                if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+                logger.log("LIST_FOLDER " + req.groupName + "/" + req.path + " by " + session.username);
+            } catch (...) {
+                // có thể gửi ACTION RESULT fail nếu muốn
+            }
+        }
         return;
     }
 
+    // FILE_MKDIR_REQ
+    if (type == PacketType::FILE_MKDIR_REQ) {
+        MkdirRequest req; req.deserialize(buf);
+        ActionResult ar{};
+        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::MKDIR)) {
+            bool ok = false;
+            try { ok = fsManager.makeDir(req.groupName, req.path); } catch (...) { ok = false; }
+            ar.success = ok; ar.message = ok ? "mkdir ok" : "mkdir fail";
+        } else {
+            ar.success = false; ar.message = "permission denied";
+        }
+        ByteBuffer out; ar.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_MKDIR_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+        logger.log("MKDIR " + req.groupName + "/" + req.path + " by " + session.username);
+        return;
+    }
+
+    // FILE_DELETE_REQ
     if (type == PacketType::FILE_DELETE_REQ) {
-        // demo stub
-        logger.log("DELETE by " + session.username);
+        DeleteRequest req; req.deserialize(buf);
+        ActionResult ar{};
+        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::DELETE)) {
+            bool ok = false;
+            try { ok = fsManager.remove(req.groupName, req.path); } catch (...) { ok = false; }
+            ar.success = ok; ar.message = ok ? "delete ok" : "delete fail";
+        } else {
+            ar.success = false; ar.message = "permission denied";
+        }
+        ByteBuffer out; ar.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_DELETE_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+        logger.log("DELETE " + req.groupName + "/" + req.path + " by " + session.username);
+        return;
+    }
+
+    // FILE_RENAME_REQ
+    if (type == PacketType::FILE_RENAME_REQ) {
+        RenameRequest req; req.deserialize(buf);
+        ActionResult ar{};
+        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::RENAME)) {
+            bool ok = false;
+            try { ok = fsManager.rename(req.groupName, req.oldPath, req.newPath); } catch (...) { ok = false; }
+            ar.success = ok; ar.message = ok ? "rename ok" : "rename fail";
+        } else {
+            ar.success = false; ar.message = "permission denied";
+        }
+        ByteBuffer out; ar.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_RENAME_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+        logger.log("RENAME " + req.groupName + "/" + req.oldPath + "->" + req.newPath + " by " + session.username);
+        return;
+    }
+
+    // FILE_COPY_REQ
+    if (type == PacketType::FILE_COPY_REQ) {
+        CopyRequest req; req.deserialize(buf);
+        ActionResult ar{};
+        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::COPY)) {
+            bool ok = false;
+            try {
+                auto src = fsManager.resolvePath(req.groupName, req.srcPath);
+                auto dst = fsManager.resolvePath(req.groupName, req.dstPath);
+                fs::copy(src, dst, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+                ok = true;
+            } catch (...) { ok = false; }
+            ar.success = ok; ar.message = ok ? "copy ok" : "copy fail";
+        } else {
+            ar.success = false; ar.message = "permission denied";
+        }
+        ByteBuffer out; ar.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_COPY_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+        logger.log("COPY " + req.groupName + "/" + req.srcPath + "->" + req.dstPath + " by " + session.username);
+        return;
+    }
+
+    // FILE_MOVE_REQ
+    if (type == PacketType::FILE_MOVE_REQ) {
+        MoveRequest req; req.deserialize(buf);
+        ActionResult ar{};
+        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::MOVE)) {
+            bool ok = false;
+            try {
+                auto src = fsManager.resolvePath(req.groupName, req.srcPath);
+                auto dst = fsManager.resolvePath(req.groupName, req.dstPath);
+                fs::rename(src, dst);
+                ok = true;
+            } catch (...) { ok = false; }
+            ar.success = ok; ar.message = ok ? "move ok" : "move fail";
+        } else {
+            ar.success = false; ar.message = "permission denied";
+        }
+        ByteBuffer out; ar.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_MOVE_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+        logger.log("MOVE " + req.groupName + "/" + req.srcPath + "->" + req.dstPath + " by " + session.username);
+        return;
+    }
+
+    // ===== FILE UPLOAD (streaming) =====
+    static std::unordered_map<int, std::ofstream> uploadStreams;
+    static std::unordered_map<int, uint64_t> uploadRemaining;
+
+    if (type == PacketType::FILE_UPLOAD_BEGIN) {
+        UploadBegin req; req.deserialize(buf);
+        ActionResult ar{};
+        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::UPLOAD)) {
+            try {
+                auto dst = fsManager.resolvePath(req.groupName, req.remotePath);
+                auto parent = fs::path(dst).parent_path();
+                fs::create_directories(parent);
+                std::ofstream ofs(dst, std::ios::binary | std::ios::trunc);
+                uploadStreams[session.fd] = std::move(ofs);
+                uploadRemaining[session.fd] = req.totalSize;
+                ar.success = true; ar.message = "upload begin ok";
+            } catch (...) {
+                ar.success = false; ar.message = "upload begin fail";
+            }
+        } else {
+            ar.success = false; ar.message = "permission denied";
+        }
+        return;
+    }
+
+    if (type == PacketType::FILE_UPLOAD_CHUNK) {
+        UploadChunk req; req.deserialize(buf);
+        auto it = uploadStreams.find(session.fd);
+        if (it != uploadStreams.end()) {
+            auto& ofs = it->second;
+            if (ofs.good() && !req.data.empty()) {
+                ofs.write(reinterpret_cast<const char*>(req.data.data()), req.data.size());
+                uploadRemaining[session.fd] -= req.data.size();
+            }
+        }
+        return;
+    }
+
+    if (type == PacketType::FILE_UPLOAD_END) {
+        ActionResult ar{};
+        auto it = uploadStreams.find(session.fd);
+        if (it != uploadStreams.end()) {
+            it->second.close();
+            uploadStreams.erase(it);
+            bool ok = (uploadRemaining[session.fd] == 0);
+            uploadRemaining.erase(session.fd);
+            ar.success = ok;
+            ar.message = ok ? "upload done" : "upload size mismatch";
+        } else {
+            ar.success = false; ar.message = "no upload stream";
+        }
+        ByteBuffer out; ar.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_UPLOAD_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+        logger.log("UPLOAD_END by " + session.username);
+        return;
+    }
+
+    // ===== FILE DOWNLOAD (streaming) =====
+    if (type == PacketType::FILE_DOWNLOAD_BEGIN) {
+        DownloadBegin req; req.deserialize(buf);
+        ActionResult ar{};
+        if (!permissionChecker.canPerform(session.username, req.groupName, FileAction::DOWNLOAD)) {
+            ar.success = false; ar.message = "permission denied";
+        } else {
+            try {
+                auto src = fsManager.resolvePath(req.groupName, req.remotePath);
+                std::ifstream ifs(src, std::ios::binary);
+                const size_t chunkSize = 64 * 1024;
+                std::vector<uint8_t> bufChunk;
+                while (ifs.good()) {
+                    bufChunk.resize(chunkSize);
+                    ifs.read(reinterpret_cast<char*>(bufChunk.data()), chunkSize);
+                    std::streamsize got = ifs.gcount();
+                    if (got <= 0) break;
+                    bufChunk.resize(static_cast<size_t>(got));
+                    DownloadChunk chunk{bufChunk};
+                    ByteBuffer out;
+                    chunk.serialize(out);
+
+                    PacketHeader hdr_net{};
+                    hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_DOWNLOAD_CHUNK));
+                    hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+                    hdr_net.seq      = htonl(0);
+                    hdr_net.checksum = htonl(0);
+
+                    // DEBUG
+                    {
+                        unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+                        std::cout << "[Server] raw header to send:";
+                        for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+                        std::cout << "\n";
+                    }
+
+                    send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+                    if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+                }
+
+                DownloadEnd endMsg;
+                ByteBuffer endBuf; endMsg.serialize(endBuf);
+
+                PacketHeader endHdr{};
+                endHdr.type     = htons(static_cast<uint16_t>(PacketType::FILE_DOWNLOAD_END));
+                endHdr.length   = htonl(static_cast<uint32_t>(endBuf.size()));
+                endHdr.seq      = htonl(0);
+                endHdr.checksum = htonl(0);
+
+                // DEBUG
+                {
+                    unsigned char* p = reinterpret_cast<unsigned char*>(&endHdr);
+                    std::cout << "[Server] raw header to send:";
+                    for (size_t i = 0; i < sizeof(endHdr); ++i) printf(" %02x", p[i]);
+                    std::cout << "\n";
+                }
+
+                send(session.fd, &endHdr, sizeof(endHdr), 0);
+                if (endBuf.size() > 0) send(session.fd, endBuf.data(), endBuf.size(), 0);
+
+                ar.success = true; ar.message = "download done";
+            } catch (...) {
+                ar.success = false; ar.message = "download fail";
+            }
+        }
+
+        ByteBuffer out; ar.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_DOWNLOAD_RES));
+        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        // DEBUG
+        {
+            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
+            std::cout << "[Server] raw header to send:";
+            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
+            std::cout << "\n";
+        }
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+        logger.log("DOWNLOAD_BEGIN by " + session.username);
         return;
     }
 

@@ -19,6 +19,11 @@ struct LoginRequest {
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
+struct AuthLoginResponse { 
+  bool success; std::string message; 
+  void serialize(ByteBuffer& buf) const; 
+  void deserialize(ByteBuffer& buf);
+};
 
 // ===== GROUP =====
 struct CreateGroupRequest {
@@ -112,4 +117,103 @@ struct DownloadFileRequest {
 
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
+};
+
+
+// ===== FILE CONTROL =====
+struct FileListRequest {
+  std::string groupName;
+  std::string path; // "." hoặc subdir
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct FileListResponse {
+  std::vector<std::string> entries;
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct MkdirRequest {
+  std::string groupName;
+  std::string path; // subdir to create
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct DeleteRequest {
+  std::string groupName;
+  std::string path; // file/dir to delete
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct RenameRequest {
+  std::string groupName;
+  std::string oldPath;
+  std::string newPath;
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct CopyRequest {
+  std::string groupName;
+  std::string srcPath;
+  std::string dstPath;
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct MoveRequest {
+  std::string groupName;
+  std::string srcPath;
+  std::string dstPath;
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+// generic small result
+struct ActionResult {
+  bool success;
+  std::string message;
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+// ===== FILE TRANSFER =====
+struct UploadBegin {
+  std::string groupName;
+  std::string remotePath;     // target path under group dir
+  uint64_t totalSize;         // total file size
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct UploadChunk {
+  std::vector<uint8_t> data;  // chunk bytes
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct UploadEnd {
+  void serialize(ByteBuffer& buf) const {}
+  void deserialize(ByteBuffer& buf) {}
+};
+
+struct DownloadBegin {
+  std::string groupName;
+  std::string remotePath;     // source path under group dir
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct DownloadChunk {
+  std::vector<uint8_t> data;  // chunk bytes
+  void serialize(ByteBuffer& buf) const;
+  void deserialize(ByteBuffer& buf);
+};
+
+struct DownloadEnd {
+  void serialize(ByteBuffer& buf) const {}
+  void deserialize(ByteBuffer& buf) {}
 };

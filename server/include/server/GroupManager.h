@@ -45,13 +45,13 @@ public:
     std::vector<std::string> listMembers(const std::string& groupName);
     std::vector<std::string> listGroupsByUser(const std::string& username);
     std::vector<std::string> listGroupsOwnedByUser(const std::string& username);
-
+    std::unordered_map<std::string, Group> loadGroups();
 
 private:
     std::string dbPath;
     std::mutex dbMutex;
 
-    std::unordered_map<std::string, Group> loadGroups();
+    
     void saveGroups(const std::unordered_map<std::string, Group>& groups);
 
     bool contains(const std::vector<std::string>& v,
