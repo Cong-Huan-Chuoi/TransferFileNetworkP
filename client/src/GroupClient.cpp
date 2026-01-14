@@ -97,6 +97,18 @@ void GroupClient::showPending() {
             std::cout << " - " << e.username << " wants to join " << e.groupName << "\n";
         std::cout << "Pending invites:\n";
         for(auto& e:res.invites)
-            std::cout << " - You are invited to " << e.groupName << " by " << e.username << "\n";
+            std::cout << " - You are invited to " << e.groupName << " by " << e.inviter << "\n";
     }
+}
+
+PendingListResponse GroupClient::getPending() {
+    ListGroupsRequest req; ByteBuffer buf; req.serialize(buf);
+    client.sendPacket((uint16_t)PacketType::GROUP_PENDING_REQ, buf);
+
+    PacketHeader hdr; ByteBuffer payload;
+    PendingListResponse res;
+    if (client.recvPacket(hdr,payload) && hdr.type==(uint16_t)PacketType::GROUP_PENDING_RES) {
+        res.deserialize(payload);
+    }
+    return res;
 }

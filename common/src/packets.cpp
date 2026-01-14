@@ -130,11 +130,15 @@ void ListGroupsResponse::deserialize(ByteBuffer& buf) {
 void PendingEntry::serialize(ByteBuffer& buf) const {
     buf.writeString(groupName);
     buf.writeString(username);
+    buf.writeString(inviter);
 }
+
 void PendingEntry::deserialize(ByteBuffer& buf) {
     groupName = buf.readString();
-    username = buf.readString();
+    username  = buf.readString();
+    inviter   = buf.readString();
 }
+
 
 void PendingListResponse::serialize(ByteBuffer& buf) const {
     buf.write<uint32_t>(joinRequests.size());

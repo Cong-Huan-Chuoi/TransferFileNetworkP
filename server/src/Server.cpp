@@ -199,9 +199,30 @@ void Server::dispatchPacket(ClientSession& session) {
     if (type == PacketType::AUTH_REGISTER_REQ) {
         RegisterRequest req;
         req.deserialize(buf);
-        authManager.registerUser(req.username, req.password);
+        AuthResult result = authManager.registerUser(req.username, req.password);
+
+        ActionResult resPkt;
+        resPkt.success = (result == AuthResult::SUCCESS);
+        if (result == AuthResult::SUCCESS) resPkt.message = "Register success";
+        else if (result == AuthResult::USER_EXISTS) resPkt.message = "User already exists";
+        else resPkt.message = "Register failed";
+
+        ByteBuffer out;
+        resPkt.serialize(out);
+
+        PacketHeader hdr_net{};
+        hdr_net.type = htons(static_cast<uint16_t>(PacketType::AUTH_REGISTER_RES));
+        hdr_net.length = htonl(static_cast<uint32_t>(out.size()));
+        hdr_net.seq = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+
+        logger.log("REGISTER " + req.username + " result: " + resPkt.message);
         return;
     }
+
 
     if (type == PacketType::AUTH_LOGIN_REQ) {
         LoginRequest req;
@@ -378,7 +399,7 @@ void Server::dispatchPacket(ClientSession& session) {
             for (auto& u : g.pending_join)
                 res.joinRequests.push_back({name,u});
             for (auto& u : g.pending_invite)
-                res.invites.push_back({name,u});
+                res.invites.push_back({name,u, g.owner});
         }
         ByteBuffer out; res.serialize(out);
         PacketHeader hdr_net{};

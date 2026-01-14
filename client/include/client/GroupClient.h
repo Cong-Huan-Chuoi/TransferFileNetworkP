@@ -2,7 +2,7 @@
 #include "Client.h"
 #include <string>
 #include <vector>
-
+#include "protocol/packets.h"
 struct GroupListCache {
     std::vector<std::string> owned;
     std::vector<std::string> joined;
@@ -41,7 +41,7 @@ public:
 
     // hiển thị pending queue (join + invite)
     void showPending();
-
+    PendingListResponse getPending();
 private:
     Client& client;
 };

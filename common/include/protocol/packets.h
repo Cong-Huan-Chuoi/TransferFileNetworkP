@@ -100,10 +100,13 @@ struct ListGroupsResponse {
 
 struct PendingEntry {
     std::string groupName;
-    std::string username;
+    std::string username; // người được mời hoặc join
+    std::string inviter;  // thêm field mới cho người mời
+
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
+
 
 struct PendingListResponse {
     std::vector<PendingEntry> joinRequests;
