@@ -95,6 +95,7 @@ int main() {
                     if (choice < 1 || choice > (int)lists.joined.size()) throw std::out_of_range("Invalid group index.");
                     
                     currentGroup = lists.joined[choice - 1];
+                    client.getSession().current_group = currentGroup;
 
                     // Menu thao tác trong nhóm đã tham gia (Joined Group)
                     while (true) {
@@ -148,7 +149,7 @@ int main() {
                     if (choice < 1 || choice > (int)lists.owned.size()) throw std::out_of_range("Invalid group index.");
                     
                     currentGroup = lists.owned[choice - 1];
-
+                    client.getSession().current_group = currentGroup;
                     // Menu quản lý nhóm sở hữu (Owned Group)
                     while (true) {
                         std::cout << "\n[Access Owned Group: " << currentGroup << "]\n"

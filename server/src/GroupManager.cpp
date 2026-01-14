@@ -247,8 +247,11 @@ bool GroupManager::rejectInvite(const std::string& groupName,
 std::vector<std::string> GroupManager::listMembers(const std::string& groupName) {
     std::lock_guard<std::mutex> lock(dbMutex);
     auto groups = loadGroups();
-    return groups[groupName].members;
+    auto it = groups.find(groupName);
+    if (it == groups.end()) return {};
+    return it->second.members;
 }
+
 
 std::vector<std::string> GroupManager::listGroupsByUser(const std::string& username) {
     std::lock_guard<std::mutex> lock(dbMutex);

@@ -21,6 +21,7 @@
 #include <fstream>
 #include <unordered_map>
 #include "server/DataPaths.h"
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
@@ -38,6 +39,10 @@ static void setNonBlocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
+
+// ===== FILE UPLOAD STREAM STATE (GLOBAL TO SERVER.cpp) =====
+static std::unordered_map<int, std::ofstream> uploadStreams;
+static std::unordered_map<int, uint64_t> uploadRemaining;
 
 // ================== SERVER ==================
 
@@ -428,7 +433,14 @@ void Server::dispatchPacket(ClientSession& session) {
         if (permissionChecker.canPerform(session.username, req.groupName, FileAction::LIST)) {
             try {
                 auto entries = fsManager.list(req.groupName, req.path);
-                resList.entries = entries;
+                resList.entries.clear();
+                for (const auto& e : entries) {
+                    FileListEntry le;
+                    le.name = e.name;
+                    le.isDir = e.isDir;
+                    le.size = e.size;
+                    resList.entries.push_back(le);
+                }
                 ByteBuffer out;
                 resList.serialize(out);
 
@@ -495,7 +507,7 @@ void Server::dispatchPacket(ClientSession& session) {
         ActionResult ar{};
         if (permissionChecker.canPerform(session.username, req.groupName, FileAction::DELETE)) {
             bool ok = false;
-            try { ok = fsManager.remove(req.groupName, req.path); } catch (...) { ok = false; }
+            try { ok = fsManager.removePath(req.groupName, req.path); } catch (...) { ok = false; }
             ar.success = ok; ar.message = ok ? "delete ok" : "delete fail";
         } else {
             ar.success = false; ar.message = "permission denied";
@@ -528,7 +540,7 @@ void Server::dispatchPacket(ClientSession& session) {
         ActionResult ar{};
         if (permissionChecker.canPerform(session.username, req.groupName, FileAction::RENAME)) {
             bool ok = false;
-            try { ok = fsManager.rename(req.groupName, req.oldPath, req.newPath); } catch (...) { ok = false; }
+            try { ok = fsManager.renamePath(req.groupName, req.oldPath, req.newPath);} catch (...) { ok = false; }
             ar.success = ok; ar.message = ok ? "rename ok" : "rename fail";
         } else {
             ar.success = false; ar.message = "permission denied";
@@ -632,78 +644,86 @@ void Server::dispatchPacket(ClientSession& session) {
     }
 
     // ===== FILE UPLOAD (streaming) =====
-    static std::unordered_map<int, std::ofstream> uploadStreams;
-    static std::unordered_map<int, uint64_t> uploadRemaining;
-
     if (type == PacketType::FILE_UPLOAD_BEGIN) {
         UploadBegin req; req.deserialize(buf);
         ActionResult ar{};
-        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::UPLOAD)) {
+
+        if (!permissionChecker.canPerform(session.username, req.groupName, FileAction::UPLOAD)) {
+            ar.success = false;
+            ar.message = "permission denied";
+        } else {
             try {
                 auto dst = fsManager.resolvePath(req.groupName, req.remotePath);
-                auto parent = fs::path(dst).parent_path();
-                fs::create_directories(parent);
-                std::ofstream ofs(dst, std::ios::binary | std::ios::trunc);
-                uploadStreams[session.fd] = std::move(ofs);
-                uploadRemaining[session.fd] = req.totalSize;
-                ar.success = true; ar.message = "upload begin ok";
+                fs::create_directories(fs::path(dst).parent_path());
+
+                uploadStreams[session.fd].open(dst, std::ios::binary | std::ios::trunc);
+                if (!uploadStreams[session.fd]) {
+                    ar.success = false;
+                    ar.message = "cannot open file";
+                } else {
+                    uploadRemaining[session.fd] = req.totalSize;
+                    ar.success = true;
+                    ar.message = "upload begin ok";
+                }
             } catch (...) {
-                ar.success = false; ar.message = "upload begin fail";
+                ar.success = false;
+                ar.message = "upload begin fail";
             }
-        } else {
-            ar.success = false; ar.message = "permission denied";
         }
+
+        ByteBuffer out; ar.serialize(out);
+        PacketHeader hdr_net{};
+        hdr_net.type     = htons((uint16_t)PacketType::FILE_UPLOAD_RES);
+        hdr_net.length   = htonl((uint32_t)out.size());
+        hdr_net.seq      = htonl(0);
+        hdr_net.checksum = htonl(0);
+
+        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+        if (out.size() > 0)
+            send(session.fd, out.data(), out.size(), 0);
         return;
     }
 
     if (type == PacketType::FILE_UPLOAD_CHUNK) {
         UploadChunk req; req.deserialize(buf);
-        auto it = uploadStreams.find(session.fd);
-        if (it != uploadStreams.end()) {
-            auto& ofs = it->second;
-            if (ofs.good() && !req.data.empty()) {
-                ofs.write(reinterpret_cast<const char*>(req.data.data()), req.data.size());
-                uploadRemaining[session.fd] -= req.data.size();
-            }
+
+        if (uploadStreams[session.fd].is_open() && !req.data.empty()) {
+            uploadStreams[session.fd].write(
+                reinterpret_cast<const char*>(req.data.data()),
+                req.data.size()
+            );
+            uploadRemaining[session.fd] -= req.data.size();
         }
         return;
     }
 
     if (type == PacketType::FILE_UPLOAD_END) {
-        ActionResult ar{};
-        auto it = uploadStreams.find(session.fd);
-        if (it != uploadStreams.end()) {
-            it->second.close();
-            uploadStreams.erase(it);
-            bool ok = (uploadRemaining[session.fd] == 0);
-            uploadRemaining.erase(session.fd);
-            ar.success = ok;
-            ar.message = ok ? "upload done" : "upload size mismatch";
-        } else {
-            ar.success = false; ar.message = "no upload stream";
-        }
-        ByteBuffer out; ar.serialize(out);
+    ActionResult ar{};
 
-        PacketHeader hdr_net{};
-        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_UPLOAD_RES));
-        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
-        hdr_net.seq      = htonl(0);
-        hdr_net.checksum = htonl(0);
-
-        // DEBUG
-        {
-            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
-            std::cout << "[Server] raw header to send:";
-            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
-            std::cout << "\n";
-        }
-
-        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
-        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
-        logger.log("UPLOAD_END by " + session.username);
-        return;
+    if (!uploadStreams[session.fd].is_open()) {
+        ar.success = false;
+        ar.message = "no upload stream";
+    } else {
+        uploadStreams[session.fd].close();
+        bool ok = (uploadRemaining[session.fd] == 0);
+        ar.success = ok;
+        ar.message = ok ? "upload done" : "upload size mismatch";
+        uploadRemaining[session.fd] = 0;
     }
 
+    ByteBuffer out; ar.serialize(out);
+    PacketHeader hdr_net{};
+    hdr_net.type     = htons((uint16_t)PacketType::FILE_UPLOAD_RES);
+    hdr_net.length   = htonl((uint32_t)out.size());
+    hdr_net.seq      = htonl(0);
+    hdr_net.checksum = htonl(0);
+
+    send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+    if (out.size() > 0)
+        send(session.fd, out.data(), out.size(), 0);
+    logger.log("UPLOAD_END by " + session.username);
+    return;
+}
     // ===== FILE DOWNLOAD (streaming) =====
     if (type == PacketType::FILE_DOWNLOAD_BEGIN) {
         DownloadBegin req; req.deserialize(buf);

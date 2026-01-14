@@ -1,4 +1,3 @@
-// FileClient.h (sửa/mở rộng)
 #pragma once
 #include "Client.h"
 #include <string>

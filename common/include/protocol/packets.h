@@ -1,13 +1,13 @@
 #pragma once
 #include "bytebuffer.h"
 #include <string>
+#include <vector>
 #include <cstdint>
 
 // ===== AUTH =====
 struct RegisterRequest {
     std::string username;
     std::string password;
-
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
@@ -15,27 +15,26 @@ struct RegisterRequest {
 struct LoginRequest {
     std::string username;
     std::string password;
-
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
+
 struct AuthLoginResponse { 
-  bool success; std::string message; 
-  void serialize(ByteBuffer& buf) const; 
-  void deserialize(ByteBuffer& buf);
+    bool success;
+    std::string message;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
 // ===== GROUP =====
 struct CreateGroupRequest {
     std::string groupName;
-
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
 
 struct JoinGroupRequest {
     std::string groupName;
-
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
@@ -86,27 +85,24 @@ struct ListMembersResponse {
 };
 
 struct ListGroupsRequest {
-    void serialize(ByteBuffer& buf) const {}
-    void deserialize(ByteBuffer& buf) {}
+    void serialize(ByteBuffer&) const {}
+    void deserialize(ByteBuffer&) {}
 };
 
 struct ListGroupsResponse {
-    std::vector<std::string> ownedGroups;   // nhóm mà user là owner
-    std::vector<std::string> joinedGroups;  // nhóm mà user là member
-
+    std::vector<std::string> ownedGroups;
+    std::vector<std::string> joinedGroups;
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
 
 struct PendingEntry {
     std::string groupName;
-    std::string username; // người được mời hoặc join
-    std::string inviter;  // thêm field mới cho người mời
-
+    std::string username;
+    std::string inviter;
     void serialize(ByteBuffer& buf) const;
     void deserialize(ByteBuffer& buf);
 };
-
 
 struct PendingListResponse {
     std::vector<PendingEntry> joinRequests;
@@ -129,9 +125,9 @@ struct RejectInviteRequest {
     void deserialize(ByteBuffer& buf);
 };
 
-
-
 // ===== FILE CONTROL =====
+
+// metadata upload (dùng cho kiểm tra + chuẩn bị)
 struct UploadFileRequest {
     std::string groupName;
     std::string remotePath;
@@ -149,101 +145,116 @@ struct DownloadFileRequest {
     void deserialize(ByteBuffer& buf);
 };
 
-
-// ===== FILE CONTROL =====
+// list folder
 struct FileListRequest {
-  std::string groupName;
-  std::string path; // "." hoặc subdir
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string path; // "." hoặc subdir
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
+};
+
+struct FileListEntry {
+    std::string name;
+    bool isDir;
+    uint64_t size;
 };
 
 struct FileListResponse {
-  std::vector<std::string> entries;
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::vector<FileListEntry> entries;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
+// mkdir / delete / rename / copy / move
 struct MkdirRequest {
-  std::string groupName;
-  std::string path; // subdir to create
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string path;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
 struct DeleteRequest {
-  std::string groupName;
-  std::string path; // file/dir to delete
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string path;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
 struct RenameRequest {
-  std::string groupName;
-  std::string oldPath;
-  std::string newPath;
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string oldPath;
+    std::string newPath;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
 struct CopyRequest {
-  std::string groupName;
-  std::string srcPath;
-  std::string dstPath;
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string srcPath;
+    std::string dstPath;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
 struct MoveRequest {
-  std::string groupName;
-  std::string srcPath;
-  std::string dstPath;
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string srcPath;
+    std::string dstPath;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
-// generic small result
 struct ActionResult {
-  bool success;
-  std::string message;
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    bool success;
+    std::string message;
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
 // ===== FILE TRANSFER =====
+// bắt đầu upload
 struct UploadBegin {
-  std::string groupName;
-  std::string remotePath;     // target path under group dir
-  uint64_t totalSize;         // total file size
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string remotePath;
+    uint64_t totalSize;
+
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
+// gói dữ liệu upload
 struct UploadChunk {
-  std::vector<uint8_t> data;  // chunk bytes
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::vector<uint8_t> data;
+
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
+// kết thúc upload
 struct UploadEnd {
-  void serialize(ByteBuffer& buf) const {}
-  void deserialize(ByteBuffer& buf) {}
+    void serialize(ByteBuffer&) const {}
+    void deserialize(ByteBuffer&) {}
 };
 
+// bắt đầu download
 struct DownloadBegin {
-  std::string groupName;
-  std::string remotePath;     // source path under group dir
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::string groupName;
+    std::string remotePath;
+
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
+// gói dữ liệu download
 struct DownloadChunk {
-  std::vector<uint8_t> data;  // chunk bytes
-  void serialize(ByteBuffer& buf) const;
-  void deserialize(ByteBuffer& buf);
+    std::vector<uint8_t> data;
+
+    void serialize(ByteBuffer& buf) const;
+    void deserialize(ByteBuffer& buf);
 };
 
+// kết thúc download
 struct DownloadEnd {
-  void serialize(ByteBuffer& buf) const {}
-  void deserialize(ByteBuffer& buf) {}
+    void serialize(ByteBuffer&) const {}
+    void deserialize(ByteBuffer&) {}
 };

@@ -79,8 +79,7 @@ enum class PacketType : uint16_t {
   FILE_DOWNLOAD_CHUNK = 65,
   FILE_DOWNLOAD_END   = 66,
   FILE_DOWNLOAD_RES   = 67,
-
-
+  
   /* ================= SYSTEM / ERROR ================= */
   ERROR_RES = 100
 };

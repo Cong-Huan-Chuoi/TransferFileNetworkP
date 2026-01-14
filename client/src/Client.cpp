@@ -1,4 +1,4 @@
-#include "client/Client.h"
+#include "client/Client.h"  
 
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -6,9 +6,11 @@
 #include <cerrno>
 #include <cstdio>
 #include <iostream>
+#include <algorithm>
 
 Client::Client(const std::string& h, int p)
-: host(h), port(p), sockfd(-1) {
+    : host(h), port(p), sockfd(-1) {
+
     // DEBUG: kích thước PacketHeader (đảm bảo packing giống server)
     std::cout << "[Client] sizeof(PacketHeader)=" << sizeof(PacketHeader) << "\n";
 }
@@ -51,7 +53,8 @@ bool Client::sendPacket(uint16_t type, ByteBuffer& payload) {
     }
 
     // DEBUG: logical values (host order)
-    std::cout << "[Client] sendPacket: type=" << type << " length=" << payload.size() << "\n";
+    std::cout << "[Client] sendPacket: type=" << type
+              << " length=" << payload.size() << "\n";
 
     if (payload.size() > 0) {
         if (send(sockfd, payload.data(), payload.size(), 0) <= 0) {
@@ -85,7 +88,8 @@ bool Client::recvPacket(PacketHeader& h, ByteBuffer& payload) {
     h.checksum = ntohl(hdr_raw.checksum);
 
     // DEBUG: giá trị đã parse (host order)
-    std::cout << "[Client] recvPacket: got header type=" << h.type << " length=" << h.length << "\n";
+    std::cout << "[Client] recvPacket: got header type=" << h.type
+              << " length=" << h.length << "\n";
 
     payload.clear();
     payload = ByteBuffer(h.length);
@@ -94,7 +98,12 @@ bool Client::recvPacket(PacketHeader& h, ByteBuffer& payload) {
         char buf[4096];
         size_t received = 0;
         while (received < h.length) {
-            ssize_t m = recv(sockfd, buf, std::min(sizeof(buf), h.length - received), 0);
+            ssize_t m = recv(
+                sockfd,
+                buf,
+                std::min(sizeof(buf), h.length - received),
+                0
+            );
             if (m <= 0) {
                 perror("[Client] recv payload error");
                 return false;
