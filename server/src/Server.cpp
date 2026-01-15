@@ -646,24 +646,32 @@ if (type == PacketType::FILE_MOVE_REQ) {
         UploadBegin req; req.deserialize(buf);
         ActionResult ar{};
 
+        // 1) Permission
         if (!permissionChecker.canPerform(session.username, req.groupName, FileAction::UPLOAD)) {
             ar.success = false;
             ar.message = "permission denied";
         } else {
             try {
-                std::filesystem::path dst =
-                fsManager.resolvePath(req.groupName, req.remotePath);
-                            fs::create_directories(fs::path(dst).parent_path());
+                // 2) Resolve path an toàn: resolve full, lấy parent, tạo thư mục
+                fs::path full = fsManager.resolvePath(req.groupName, req.remotePath);
+                fs::path parent = full.parent_path();
+                fs::create_directories(parent);
 
-                uploadStreams[session.fd].open(dst, std::ios::binary | std::ios::trunc);
-                if (!uploadStreams[session.fd]) {
+                // 3) Mở stream ghi file
+                std::ofstream ofs(full, std::ios::binary | std::ios::trunc);
+                if (!ofs) {
                     ar.success = false;
                     ar.message = "cannot open file";
                 } else {
+                    // 4) Gắn stream & số byte còn lại theo fd
+                    uploadStreams[session.fd] = std::move(ofs);
                     uploadRemaining[session.fd] = req.totalSize;
                     ar.success = true;
                     ar.message = "upload begin ok";
                 }
+            } catch (const std::exception& e) {
+                ar.success = false;
+                ar.message = std::string("upload begin fail: ") + e.what();
             } catch (...) {
                 ar.success = false;
                 ar.message = "upload begin fail";
@@ -678,37 +686,73 @@ if (type == PacketType::FILE_MOVE_REQ) {
         hdr_net.checksum = htonl(0);
 
         send(session.fd, &hdr_net, sizeof(hdr_net), 0);
-        if (out.size() > 0)
-            send(session.fd, out.data(), out.size(), 0);
+        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+
+        logger.log("UPLOAD_BEGIN group=" + req.groupName + " path=" + req.remotePath + " by " + session.username + " -> " + (ar.success ? "OK" : ar.message));
         return;
     }
+
 
     if (type == PacketType::FILE_UPLOAD_CHUNK) {
         UploadChunk req; req.deserialize(buf);
 
-        if (uploadStreams[session.fd].is_open() && !req.data.empty()) {
-            uploadStreams[session.fd].write(
-                reinterpret_cast<const char*>(req.data.data()),
-                req.data.size()
-            );
-            uploadRemaining[session.fd] -= req.data.size();
+        auto itStream = uploadStreams.find(session.fd);
+        auto itRemain = uploadRemaining.find(session.fd);
+
+        if (itStream != uploadStreams.end() && itStream->second.is_open() &&
+            itRemain != uploadRemaining.end() && !req.data.empty()) {
+
+            // 1) Không cho ghi quá số byte còn lại
+            uint64_t remain = itRemain->second;
+            size_t toWrite = req.data.size();
+            if (toWrite > remain) {
+                toWrite = static_cast<size_t>(remain);
+            }
+
+            if (toWrite > 0) {
+                itStream->second.write(reinterpret_cast<const char*>(req.data.data()), toWrite);
+                itRemain->second -= toWrite;
+            }
+
+            // 2) Flush nhẹ để giảm mất dữ liệu nếu disconnect
+            itStream->second.flush();
         }
+
+        // Không trả response ở chunk để giảm overhead; kết quả trả ở END
         return;
     }
 
-    if (type == PacketType::FILE_UPLOAD_END) {
-    ActionResult ar{};
 
-    if (!uploadStreams[session.fd].is_open()) {
-        ar.success = false;
-        ar.message = "no upload stream";
-    } else {
-        uploadStreams[session.fd].close();
-        bool ok = (uploadRemaining[session.fd] == 0);
-        ar.success = ok;
-        ar.message = ok ? "upload done" : "upload size mismatch";
-        uploadRemaining[session.fd] = 0;
-    }
+    if (type == PacketType::FILE_UPLOAD_END) {
+        ActionResult ar{};
+
+        auto itStream = uploadStreams.find(session.fd);
+        auto itRemain = uploadRemaining.find(session.fd);
+
+        if (itStream == uploadStreams.end() || !itStream->second.is_open()) {
+            ar.success = false;
+            ar.message = "no upload stream";
+        } else {
+            try {
+                itStream->second.flush();
+                itStream->second.close();
+
+                bool ok = (itRemain != uploadRemaining.end() && itRemain->second == 0);
+                ar.success = ok;
+                ar.message = ok ? "upload done" : "upload size mismatch";
+
+            } catch (const std::exception& e) {
+                ar.success = false;
+                ar.message = std::string("upload end fail: ") + e.what();
+            } catch (...) {
+                ar.success = false;
+                ar.message = "upload end fail";
+            }
+        }
+
+    // Dọn state để tránh rò rỉ
+    uploadStreams.erase(session.fd);
+    uploadRemaining.erase(session.fd);
 
     ByteBuffer out; ar.serialize(out);
     PacketHeader hdr_net{};
@@ -718,11 +762,12 @@ if (type == PacketType::FILE_MOVE_REQ) {
     hdr_net.checksum = htonl(0);
 
     send(session.fd, &hdr_net, sizeof(hdr_net), 0);
-    if (out.size() > 0)
-        send(session.fd, out.data(), out.size(), 0);
-    logger.log("UPLOAD_END by " + session.username);
+    if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
+
+    logger.log("UPLOAD_END by " + session.username + " -> " + (ar.success ? "OK" : ar.message));
     return;
 }
+
     // ===== FILE DOWNLOAD (streaming) =====
     if (type == PacketType::FILE_DOWNLOAD_BEGIN) {
         DownloadBegin req; req.deserialize(buf);

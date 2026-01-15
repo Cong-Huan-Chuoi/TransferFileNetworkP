@@ -25,7 +25,9 @@ FileSystemManager::list(const std::string& group,
                         const std::string& path) {
     std::vector<Entry> res;
     auto full = resolvePath(group, path);
-
+    if (!fs::exists(full)) { // Trả về rỗng, client sẽ in "group chưa có folder nào" 
+        return res; 
+    }
     for (auto& e : fs::directory_iterator(full)) {
         Entry ent;
         ent.name = e.path().filename().string();
