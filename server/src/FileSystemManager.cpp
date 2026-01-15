@@ -6,8 +6,10 @@ namespace fs = std::filesystem;
 FileSystemManager::FileSystemManager(const std::string& baseDir)
     : base(baseDir) {}
 
-std::string FileSystemManager::resolvePath(const std::string& group,
-                                           const std::string& path) {
+std::filesystem::path FileSystemManager::resolvePath(
+    const std::string& group,
+    const std::string& path)
+{
     fs::path p = fs::path(base) / group / path;
     p = fs::weakly_canonical(p);
 
@@ -15,7 +17,7 @@ std::string FileSystemManager::resolvePath(const std::string& group,
     if (p.string().find(root.string()) != 0)
         throw std::runtime_error("Path traversal");
 
-    return p.string();
+    return p;
 }
 
 std::vector<FileSystemManager::Entry>
@@ -55,19 +57,69 @@ bool FileSystemManager::renamePath(const std::string& group,
     return true;
 }
 
-bool FileSystemManager::copyPath(const std::string& group,
-                                 const std::string& src,
-                                 const std::string& dst) {
-    fs::copy(resolvePath(group, src),
-             resolvePath(group, dst),
-             fs::copy_options::recursive);
-    return true;
-}
+        bool FileSystemManager::copyPath(
+        const std::string& group,
+        const std::string& src,
+        const std::string& dst)
+    {
+        namespace fs = std::filesystem;
 
-bool FileSystemManager::movePath(const std::string& group,
-                                 const std::string& src,
-                                 const std::string& dst) {
-    fs::rename(resolvePath(group, src),
-               resolvePath(group, dst));
-    return true;
-}
+        fs::path srcPath = resolvePath(group, src);
+        fs::path dstPath = resolvePath(group, dst);
+
+        if (!fs::exists(srcPath))
+            throw std::runtime_error("source not exist");
+
+        if (fs::exists(dstPath))
+            throw std::runtime_error("destination exists");
+
+        fs::create_directories(dstPath.parent_path());
+
+        if (fs::is_directory(srcPath)) {
+            fs::copy(srcPath, dstPath, fs::copy_options::recursive);
+        } else {
+            fs::copy_file(srcPath, dstPath);
+        }
+        return true;
+    }
+
+
+        bool FileSystemManager::movePath(
+        const std::string& group,
+        const std::string& src,
+        const std::string& dst)
+    {
+        fs::path srcPath = resolvePath(group, src);
+        fs::path dstPath = fs::path(base) / group / dst;
+
+        if (!fs::exists(srcPath)) {
+            return false;
+        }
+
+        fs::create_directories(dstPath.parent_path());
+        dstPath = fs::weakly_canonical(dstPath);
+
+        try {
+            fs::rename(srcPath, dstPath);
+            return true;
+        } catch (...) {
+            // fallback
+            try {
+                if (fs::is_directory(srcPath)) {
+                    fs::copy(srcPath, dstPath,
+                        fs::copy_options::recursive |
+                        fs::copy_options::overwrite_existing);
+                    fs::remove_all(srcPath);
+                } else {
+                    fs::copy_file(srcPath, dstPath,
+                        fs::copy_options::overwrite_existing);
+                    fs::remove(srcPath);
+                }
+                return true;
+            } catch (...) {
+                return false;
+            }
+        }
+    }
+
+

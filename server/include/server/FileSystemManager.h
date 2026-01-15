@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <filesystem> 
 
 class FileSystemManager {
 public:
@@ -28,17 +29,19 @@ public:
                     const std::string& oldPath,
                     const std::string& newPath);
 
-    bool copyPath(const std::string& group,
-                  const std::string& src,
-                  const std::string& dst);
+    bool copyPath(const std::string& groupName,
+                const std::string& srcPath,
+                const std::string& dstPath);
 
-    bool movePath(const std::string& group,
-                  const std::string& src,
-                  const std::string& dst);
+    bool movePath(const std::string& groupName,
+                const std::string& srcPath,
+                const std::string& dstPath);
 
     // ===== Security helper =====
-    std::string resolvePath(const std::string& group,
-                            const std::string& path);
+        std::filesystem::path resolvePath(
+        const std::string& group,
+        const std::string& path
+    );
 
 private:
     std::string base;

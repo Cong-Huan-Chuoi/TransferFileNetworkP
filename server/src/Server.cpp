@@ -567,81 +567,79 @@ void Server::dispatchPacket(ClientSession& session) {
         return;
     }
 
-    // FILE_COPY_REQ
-    if (type == PacketType::FILE_COPY_REQ) {
-        CopyRequest req; req.deserialize(buf);
-        ActionResult ar{};
-        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::COPY)) {
-            bool ok = false;
-            try {
-                auto src = fsManager.resolvePath(req.groupName, req.srcPath);
-                auto dst = fsManager.resolvePath(req.groupName, req.dstPath);
-                fs::copy(src, dst, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
-                ok = true;
-            } catch (...) { ok = false; }
-            ar.success = ok; ar.message = ok ? "copy ok" : "copy fail";
-        } else {
-            ar.success = false; ar.message = "permission denied";
+
+if (type == PacketType::FILE_COPY_REQ) {
+    CopyRequest req; 
+    req.deserialize(buf);
+
+    ActionResult ar{};
+
+    if (permissionChecker.canPerform(session.username, req.groupName, FileAction::COPY)) {
+        try {
+            bool ok = fsManager.copyPath(req.groupName, req.srcPath, req.dstPath);
+            ar.success = ok;
+            ar.message = ok ? "copy done" : "copy failed";
+        } catch (const std::exception& e) {
+            ar.success = false;
+            ar.message = e.what();
         }
-        ByteBuffer out; ar.serialize(out);
-
-        PacketHeader hdr_net{};
-        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_COPY_RES));
-        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
-        hdr_net.seq      = htonl(0);
-        hdr_net.checksum = htonl(0);
-
-        // DEBUG
-        {
-            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
-            std::cout << "[Server] raw header to send:";
-            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
-            std::cout << "\n";
-        }
-
-        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
-        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
-        logger.log("COPY " + req.groupName + "/" + req.srcPath + "->" + req.dstPath + " by " + session.username);
-        return;
+    } else {
+        ar.success = false;
+        ar.message = "permission denied";
     }
 
-    // FILE_MOVE_REQ
-    if (type == PacketType::FILE_MOVE_REQ) {
-        MoveRequest req; req.deserialize(buf);
-        ActionResult ar{};
-        if (permissionChecker.canPerform(session.username, req.groupName, FileAction::MOVE)) {
-            bool ok = false;
-            try {
-                auto src = fsManager.resolvePath(req.groupName, req.srcPath);
-                auto dst = fsManager.resolvePath(req.groupName, req.dstPath);
-                fs::rename(src, dst);
-                ok = true;
-            } catch (...) { ok = false; }
-            ar.success = ok; ar.message = ok ? "move ok" : "move fail";
-        } else {
-            ar.success = false; ar.message = "permission denied";
+    ByteBuffer out;
+    ar.serialize(out);
+
+    PacketHeader hdr_net{};
+    hdr_net.type     = htons((uint16_t)PacketType::FILE_COPY_RES);
+    hdr_net.length   = htonl((uint32_t)out.size());
+    hdr_net.seq      = htonl(0);
+    hdr_net.checksum = htonl(0);
+
+    send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+    if (out.size() > 0)
+        send(session.fd, out.data(), out.size(), 0);
+
+    return;
+}
+
+if (type == PacketType::FILE_MOVE_REQ) {
+    MoveRequest req; 
+    req.deserialize(buf);
+
+    ActionResult ar{};
+
+    if (permissionChecker.canPerform(session.username, req.groupName, FileAction::MOVE)) {
+        try {
+            bool ok = fsManager.movePath(req.groupName, req.srcPath, req.dstPath);
+            ar.success = ok;
+            ar.message = ok ? "move done" : "move failed";
+        } catch (const std::exception& e) {
+            ar.success = false;
+            ar.message = e.what();
         }
-        ByteBuffer out; ar.serialize(out);
-
-        PacketHeader hdr_net{};
-        hdr_net.type     = htons(static_cast<uint16_t>(PacketType::FILE_MOVE_RES));
-        hdr_net.length   = htonl(static_cast<uint32_t>(out.size()));
-        hdr_net.seq      = htonl(0);
-        hdr_net.checksum = htonl(0);
-
-        // DEBUG
-        {
-            unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_net);
-            std::cout << "[Server] raw header to send:";
-            for (size_t i = 0; i < sizeof(hdr_net); ++i) printf(" %02x", p[i]);
-            std::cout << "\n";
-        }
-
-        send(session.fd, &hdr_net, sizeof(hdr_net), 0);
-        if (out.size() > 0) send(session.fd, out.data(), out.size(), 0);
-        logger.log("MOVE " + req.groupName + "/" + req.srcPath + "->" + req.dstPath + " by " + session.username);
-        return;
+    } else {
+        ar.success = false;
+        ar.message = "permission denied";
     }
+
+    ByteBuffer out;
+    ar.serialize(out);
+
+    PacketHeader hdr_net{};
+    hdr_net.type     = htons((uint16_t)PacketType::FILE_MOVE_RES);
+    hdr_net.length   = htonl((uint32_t)out.size());
+    hdr_net.seq      = htonl(0);
+    hdr_net.checksum = htonl(0);
+
+    send(session.fd, &hdr_net, sizeof(hdr_net), 0);
+    if (out.size() > 0)
+        send(session.fd, out.data(), out.size(), 0);
+
+    return;
+}
+
 
     // ===== FILE UPLOAD (streaming) =====
     if (type == PacketType::FILE_UPLOAD_BEGIN) {
@@ -653,8 +651,9 @@ void Server::dispatchPacket(ClientSession& session) {
             ar.message = "permission denied";
         } else {
             try {
-                auto dst = fsManager.resolvePath(req.groupName, req.remotePath);
-                fs::create_directories(fs::path(dst).parent_path());
+                std::filesystem::path dst =
+                fsManager.resolvePath(req.groupName, req.remotePath);
+                            fs::create_directories(fs::path(dst).parent_path());
 
                 uploadStreams[session.fd].open(dst, std::ios::binary | std::ios::trunc);
                 if (!uploadStreams[session.fd]) {
@@ -732,7 +731,8 @@ void Server::dispatchPacket(ClientSession& session) {
             ar.success = false; ar.message = "permission denied";
         } else {
             try {
-                auto src = fsManager.resolvePath(req.groupName, req.remotePath);
+                std::filesystem::path src =
+                fsManager.resolvePath(req.groupName, req.remotePath);
                 std::ifstream ifs(src, std::ios::binary);
                 const size_t chunkSize = 64 * 1024;
                 std::vector<uint8_t> bufChunk;
