@@ -1,39 +1,30 @@
 #include "server/Logger.h"
-#include <chrono>
+#include <fstream>
 #include <ctime>
+#include <filesystem>
 
-Logger::Logger(const std::string& file) {
-    ofs.open(file, std::ios::app);
-}
+namespace fs = std::filesystem;
 
-void Logger::log(LogLevel level, const std::string& msg) {
-    std::lock_guard<std::mutex> lock(mtx);
-
-    auto now = std::chrono::system_clock::to_time_t(
-        std::chrono::system_clock::now());
-
-    ofs << std::ctime(&now)
-        << "[" << level_to_string(level) << "] "
-        << msg << "\n";
-}
-
-void Logger::info(const std::string& msg) {
-    log(LogLevel::INFO, msg);
-}
-
-void Logger::warn(const std::string& msg) {
-    log(LogLevel::WARN, msg);
-}
-
-void Logger::error(const std::string& msg) {
-    log(LogLevel::ERROR, msg);
-}
-
-std::string Logger::level_to_string(LogLevel level) {
-    switch (level) {
-        case LogLevel::INFO:  return "INFO";
-        case LogLevel::WARN:  return "WARN";
-        case LogLevel::ERROR: return "ERROR";
+Logger::Logger(const std::string& file)
+: logFile(file) {
+    try {
+        fs::path p = fs::path(logFile).parent_path();
+        if (!p.empty() && !fs::exists(p)) {
+            fs::create_directories(p);
+        }
+        // Mỗi lần khởi tạo Logger thì xóa nội dung file cũ
+        std::ofstream out(logFile, std::ios::trunc);
+    } catch (...) {
+        // Không ném ngoại lệ ở constructor logger
     }
-    return "UNKNOWN";
+}
+
+
+void Logger::log(const std::string& msg) {
+    std::lock_guard<std::mutex> lock(mtx);
+    std::ofstream out(logFile, std::ios::app);
+    if (!out) return;
+    std::time_t t = std::time(nullptr);
+    // ctime trả về chuỗi có newline, giữ nguyên để dễ đọc
+    out << std::ctime(&t) << ": " << msg << "\n";
 }

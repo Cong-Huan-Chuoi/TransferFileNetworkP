@@ -1,43 +1,26 @@
 #pragma once
-
 #include <string>
-
-#include "server/SessionManager.h"
 #include "server/GroupManager.h"
 
-/*
- * PermissionChecker
- *  - Kiểm tra quyền truy cập
- *  - KHÔNG thao tác file
- *  - KHÔNG gửi packet
- */
+enum class FileAction {
+    LIST,
+    UPLOAD,
+    DOWNLOAD,
+    MKDIR,
+    RENAME,
+    DELETE,
+    MOVE,
+    COPY
+};
+
 class PermissionChecker {
 public:
-    PermissionChecker(const SessionManager& sessionMgr,
-                      const GroupManager& groupMgr);
+    explicit PermissionChecker(GroupManager& gm);
 
-    bool can_upload(const std::string& group,
-                    const std::string& username) const;
-
-    bool can_download(const std::string& group,
-                      const std::string& username) const;
-
-    bool can_create_dir(const std::string& group,
-                        const std::string& username) const;
-
-    bool can_delete_file(const std::string& group,
-                         const std::string& username) const;
-
-    bool can_rename_file(const std::string& group,
-                         const std::string& username) const;
-
-    bool can_delete_dir(const std::string& group,
-                        const std::string& username) const;
-
-    bool can_rename_dir(const std::string& group,
-                        const std::string& username) const;
+    bool canPerform(const std::string& user,
+                    const std::string& group,
+                    FileAction action);
 
 private:
-    const SessionManager& sessionManager;
-    const GroupManager& groupManager;
+    GroupManager& groupManager;
 };

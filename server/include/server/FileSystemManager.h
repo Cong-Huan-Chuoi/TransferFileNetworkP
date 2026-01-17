@@ -1,68 +1,48 @@
 #pragma once
-
 #include <string>
 #include <vector>
-#include <filesystem>
 #include <cstdint>
+#include <filesystem> 
 
-/*
- * FileSystemManager
- *  - Thao tác với filesystem thật
- *  - Root: data/groups/
- */
 class FileSystemManager {
 public:
-    explicit FileSystemManager(const std::string& base_dir);
+    struct Entry {
+        std::string name;
+        bool isDir;
+        uint64_t size; // = 0 nếu là thư mục
+    };
 
-    /* ===== Directory ===== */
-    bool create_group_root(const std::string& group);
-    bool create_dir(const std::string& group,
-                    const std::string& relative_path);
+    explicit FileSystemManager(const std::string& baseDir);
 
-    bool remove_dir(const std::string& group,
-                    const std::string& relative_path);
+    // ===== Core folder operations =====
+    std::vector<Entry> list(const std::string& group,
+                            const std::string& path);
 
-    bool rename_dir(const std::string& group,
-                    const std::string& old_path,
-                    const std::string& new_path);
+    bool makeDir(const std::string& group,
+                 const std::string& path);
 
-    /* ===== File ===== */
-    bool remove_file(const std::string& group,
-                     const std::string& relative_path);
+    // ===== Common file/folder operations =====
+    bool removePath(const std::string& group,
+                    const std::string& path);
 
-    bool rename_file(const std::string& group,
-                     const std::string& old_path,
-                     const std::string& new_path);
+    bool renamePath(const std::string& group,
+                    const std::string& oldPath,
+                    const std::string& newPath);
 
-    bool copy_file(const std::string& group,
-                   const std::string& src,
-                   const std::string& dst);
+    bool copyPath(const std::string& groupName,
+                const std::string& srcPath,
+                const std::string& dstPath);
 
-    bool move_file(const std::string& group,
-                   const std::string& src,
-                   const std::string& dst);
+    bool movePath(const std::string& groupName,
+                const std::string& srcPath,
+                const std::string& dstPath);
 
-    /* ===== Listing ===== */
-    std::vector<std::string> list_dir(const std::string& group,
-                                      const std::string& relative_path) const;
-
-    /* ===== Upload / Download ===== */
-    bool write_file_chunk(const std::string& group,
-                          const std::string& relative_path,
-                          const uint8_t* data,
-                          size_t size,
-                          bool append);
-
-    bool read_file_chunk(const std::string& group,
-                          const std::string& relative_path,
-                          size_t offset,
-                          size_t size,
-                          std::vector<uint8_t>& out) const;
+    // ===== Security helper =====
+        std::filesystem::path resolvePath(
+        const std::string& group,
+        const std::string& path
+    );
 
 private:
-    std::filesystem::path resolve_path(const std::string& group,
-                                       const std::string& relative_path) const;
-
-private:
-    std::filesystem::path base;
+    std::string base;
 };
