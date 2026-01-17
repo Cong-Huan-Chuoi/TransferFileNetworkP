@@ -1,65 +1,36 @@
 #include "server/PermissionChecker.h"
+#include "server/GroupManager.h"
+PermissionChecker::PermissionChecker(GroupManager& gm)
+    : groupManager(gm) {}
 
-/*
- * Constructor
- */
-PermissionChecker::PermissionChecker(const SessionManager& sessionMgr,
-                                     const GroupManager& groupMgr)
-    : sessionManager(sessionMgr),
-      groupManager(groupMgr) {}
+bool PermissionChecker::canPerform(const std::string& user,
+                                   const std::string& group,
+                                   FileAction action) {
+    auto members = groupManager.listMembers(group);
+    if (members.empty()) return false;
 
-/*
- * Thành viên + owner đều được upload
- */
-bool PermissionChecker::can_upload(const std::string& group,
-                                   const std::string& username) const {
-    return groupManager.is_member(group, username);
-}
+    bool isMember = false;
+    for (auto& m : members)
+        if (m == user) isMember = true;
+    if (!isMember) return false;
 
-/*
- * Thành viên + owner đều được download
- */
-bool PermissionChecker::can_download(const std::string& group,
-                                     const std::string& username) const {
-    return groupManager.is_member(group, username);
-}
+    // ✅ Sửa chỗ này: kiểm tra owner đúng cách
+    auto groups = groupManager.loadGroups();
+    auto it = groups.find(group);
+    if (it == groups.end()) return false;
+    bool isOwner = (it->second.owner == user);
 
-/*
- * Thành viên + owner đều được tạo thư mục
- */
-bool PermissionChecker::can_create_dir(const std::string& group,
-                                       const std::string& username) const {
-    return groupManager.is_member(group, username);
-}
-
-/*
- * Chỉ owner được xóa file
- */
-bool PermissionChecker::can_delete_file(const std::string& group,
-                                        const std::string& username) const {
-    return groupManager.is_owner(group, username);
-}
-
-/*
- * Chỉ owner được đổi tên file
- */
-bool PermissionChecker::can_rename_file(const std::string& group,
-                                        const std::string& username) const {
-    return groupManager.is_owner(group, username);
-}
-
-/*
- * Chỉ owner được xóa thư mục
- */
-bool PermissionChecker::can_delete_dir(const std::string& group,
-                                       const std::string& username) const {
-    return groupManager.is_owner(group, username);
-}
-
-/*
- * Chỉ owner được đổi tên thư mục
- */
-bool PermissionChecker::can_rename_dir(const std::string& group,
-                                       const std::string& username) const {
-    return groupManager.is_owner(group, username);
+    switch (action) {
+        case FileAction::LIST:
+        case FileAction::UPLOAD:
+        case FileAction::DOWNLOAD:
+        case FileAction::MKDIR:
+            return true;
+        case FileAction::RENAME:
+        case FileAction::DELETE:
+        case FileAction::MOVE:
+        case FileAction::COPY:
+            return isOwner;
+    }
+    return false;
 }

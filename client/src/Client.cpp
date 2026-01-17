@@ -1,60 +1,107 @@
 #include "client/Client.h"
-#include "client/AuthClient.h"
-#include "client/GroupClient.h"
-#include "client/FileClient.h"
-#include "protocol/packets.h"
+
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <cstring>
+#include <cerrno>
+#include <cstdio>
 #include <iostream>
 
-Client::Client(const std::string& host, int port) {
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+Client::Client(const std::string& h, int p)
+: host(h), port(p), sockfd(-1) {
+    // DEBUG: kích thước PacketHeader (đảm bảo packing giống server)
+    std::cout << "[Client] sizeof(PacketHeader)=" << sizeof(PacketHeader) << "\n";
+}
+
+Client::~Client() {
+    if (sockfd >= 0) close(sockfd);
+}
+
+bool Client::connectToServer() {
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) return false;
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
 
-    connect(sock, (sockaddr*)&addr, sizeof(addr));
-
-    auth  = new AuthClient(*this);
-    group = new GroupClient(*this);
-    file  = new FileClient(*this);
+    return connect(sockfd, (sockaddr*)&addr, sizeof(addr)) == 0;
 }
 
-Client::~Client() {
-    close(sock);
-    delete auth;
-    delete group;
-    delete file;
-}
+bool Client::sendPacket(uint16_t type, ByteBuffer& payload) {
+    // Serialize header to network order
+    PacketHeader h{};
+    h.type     = htons(type);
+    h.length   = htonl(static_cast<uint32_t>(payload.size()));
+    h.seq      = htonl(0);
+    h.checksum = htonl(0);
 
-void Client::send_packet(PacketType type, const std::string& payload) {
-    std::vector<uint8_t> data(payload.begin(), payload.end());
-    auto pkt = make_packet(type, 0, 0, data);
-    send(sock, pkt.data(), pkt.size(), 0);
-}
-
-bool Client::recv_packet(PacketHeader& h, std::vector<uint8_t>& payload) {
-    uint8_t buf[4096];
-    int n = recv(sock, buf, sizeof(buf), 0);
-    if (n <= 0) return false;
-
-    buffer.append(buf, n);
-    return try_parse_packet(buffer, h, payload);
-}
-
-void Client::run() {
-    std::string cmd;
-
-    while (true) {
-        std::cout << "> ";
-        std::getline(std::cin, cmd);
-
-        if (auth->handle(cmd)) continue;
-        if (group->handle(cmd)) continue;
-        if (file->handle(cmd)) continue;
-
-        std::cout << "Unknown command\n";
+    // DEBUG: raw header bytes trước khi gửi
+    {
+        unsigned char* p = reinterpret_cast<unsigned char*>(&h);
+        std::cout << "[Client] raw header:";
+        for (size_t i = 0; i < sizeof(h); ++i) printf(" %02x", p[i]);
+        std::cout << "\n";
     }
+
+    if (send(sockfd, &h, sizeof(h), 0) <= 0) {
+        perror("[Client] send header failed");
+        return false;
+    }
+
+    // DEBUG: logical values (host order)
+    std::cout << "[Client] sendPacket: type=" << type << " length=" << payload.size() << "\n";
+
+    if (payload.size() > 0) {
+        if (send(sockfd, payload.data(), payload.size(), 0) <= 0) {
+            perror("[Client] send payload failed");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Client::recvPacket(PacketHeader& h, ByteBuffer& payload) {
+    PacketHeader hdr_raw;
+    ssize_t n = recv(sockfd, &hdr_raw, sizeof(hdr_raw), MSG_WAITALL);
+    if (n <= 0) {
+        perror("[Client] recv header error");
+        return false;
+    }
+
+    // DEBUG: raw header bytes khi nhận
+    {
+        unsigned char* p = reinterpret_cast<unsigned char*>(&hdr_raw);
+        std::cout << "[Client] raw header:";
+        for (size_t i = 0; i < sizeof(hdr_raw); ++i) printf(" %02x", p[i]);
+        std::cout << "\n";
+    }
+
+    // Convert về host order
+    h.type     = ntohs(hdr_raw.type);
+    h.length   = ntohl(hdr_raw.length);
+    h.seq      = ntohl(hdr_raw.seq);
+    h.checksum = ntohl(hdr_raw.checksum);
+
+    // DEBUG: giá trị đã parse (host order)
+    std::cout << "[Client] recvPacket: got header type=" << h.type << " length=" << h.length << "\n";
+
+    payload.clear();
+    payload = ByteBuffer(h.length);
+
+    if (h.length > 0) {
+        char buf[4096];
+        size_t received = 0;
+        while (received < h.length) {
+            ssize_t m = recv(sockfd, buf, std::min(sizeof(buf), h.length - received), 0);
+            if (m <= 0) {
+                perror("[Client] recv payload error");
+                return false;
+            }
+            payload.append(buf, m);
+            received += m;
+        }
+    }
+    return true;
 }

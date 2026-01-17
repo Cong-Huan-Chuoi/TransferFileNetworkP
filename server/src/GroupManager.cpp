@@ -1,231 +1,276 @@
 #include "server/GroupManager.h"
+
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
-/* ===================== Utility ===================== */
 
-std::unordered_set<std::string>
-GroupManager::split(const std::string& s) {
-    std::unordered_set<std::string> result;
-    std::stringstream ss(s);
-    std::string item;
-    while (std::getline(ss, item, ',')) {
-        if (!item.empty())
-            result.insert(item);
-    }
-    return result;
-}
-
-std::string
-GroupManager::join(const std::unordered_set<std::string>& s) {
-    std::string out;
-    bool first = true;
-    for (const auto& x : s) {
-        if (!first) out += ",";
-        out += x;
-        first = false;
-    }
-    return out;
-}
-
-/* ===================== Constructor ===================== */
 
 GroupManager::GroupManager(const std::string& path)
-    : db_path(path) {
-    load_db();
+    : dbPath(path) {}
+
+bool GroupManager::contains(const std::vector<std::string>& v,
+                            const std::string& x) {
+    for (auto& s : v) if (s == x) return true;
+    return false;
 }
 
-/* ===================== DB ===================== */
+void GroupManager::remove(std::vector<std::string>& v,
+                          const std::string& x) {
+    v.erase(std::remove(v.begin(), v.end(), x), v.end());
+}
 
-void GroupManager::load_db() {
-    std::ifstream file(db_path);
-    if (!file.is_open())
-        return;
+std::unordered_map<std::string, Group> GroupManager::loadGroups() {
+    std::unordered_map<std::string, Group> groups;
+    std::ifstream in(dbPath);
+    if (!in.is_open()) return groups;
 
     std::string line;
-    Group g;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
 
-    while (std::getline(file, line)) {
-        if (line == "[group]") {
-            if (!g.name.empty())
-                groups[g.name] = g;
-            g = Group{};
-        } else if (line.rfind("name=", 0) == 0) {
-            g.name = line.substr(5);
-        } else if (line.rfind("owner=", 0) == 0) {
-            g.owner = line.substr(6);
-        } else if (line.rfind("members=", 0) == 0) {
-            g.members = split(line.substr(8));
-        } else if (line.rfind("pending=", 0) == 0) {
-            g.pending_requests = split(line.substr(8));
-        } else if (line.rfind("invited=", 0) == 0) {
-            g.invited_users = split(line.substr(8));
+        Group g;
+        std::istringstream iss(line);
+        std::string token;
+
+        std::getline(iss, g.name, '|');
+
+        while (std::getline(iss, token, '|')) {
+            auto pos = token.find('=');
+            if (pos == std::string::npos) continue;
+
+            std::string key = token.substr(0, pos);
+            std::string val = token.substr(pos + 1);
+
+            std::stringstream ss(val);
+            std::string item;
+
+            if (key == "owner") g.owner = val;
+            else if (key == "members") {
+                while (std::getline(ss, item, ','))
+                    if (!item.empty()) g.members.push_back(item);
+            }
+            else if (key == "pending_join") {
+                while (std::getline(ss, item, ','))
+                    if (!item.empty()) g.pending_join.push_back(item);
+            }
+            else if (key == "pending_invite") {
+                while (std::getline(ss, item, ','))
+                    if (!item.empty()) g.pending_invite.push_back(item);
+            }
         }
-    }
-
-    if (!g.name.empty())
         groups[g.name] = g;
+    }
+    return groups;
 }
 
-void GroupManager::save_db() const {
-    std::ofstream file(db_path, std::ios::trunc);
+void GroupManager::saveGroups(
+    const std::unordered_map<std::string, Group>& groups) {
 
-    for (const auto& [_, g] : groups) {
-        file << "[group]\n";
-        file << "name=" << g.name << "\n";
-        file << "owner=" << g.owner << "\n";
-        file << "members=" << join(g.members) << "\n";
-        file << "pending=" << join(g.pending_requests) << "\n";
-        file << "invited=" << join(g.invited_users) << "\n\n";
+    std::ofstream out(dbPath, std::ios::trunc);
+    for (auto& [name, g] : groups) {
+        out << name
+            << "|owner=" << g.owner
+            << "|members=";
+
+        for (size_t i = 0; i < g.members.size(); ++i) {
+            if (i) out << ",";
+            out << g.members[i];
+        }
+
+        out << "|pending_join=";
+        for (size_t i = 0; i < g.pending_join.size(); ++i) {
+            if (i) out << ",";
+            out << g.pending_join[i];
+        }
+
+        out << "|pending_invite=";
+        for (size_t i = 0; i < g.pending_invite.size(); ++i) {
+            if (i) out << ",";
+            out << g.pending_invite[i];
+        }
+
+        out << "\n";
     }
 }
 
-/* ===================== Logic ===================== */
+// GroupManager.cpp (sửa createGroup)
+bool GroupManager::createGroup(const std::string& groupName, const std::string& owner) {
+  std::lock_guard<std::mutex> lock(dbMutex);
+  auto groups = loadGroups();
+  if (groups.count(groupName)) return false;
 
-bool GroupManager::create_group(const std::string& group_name,
-                                const std::string& owner) {
-    if (groups.count(group_name))
-        return false;
+  Group g;
+  g.name = groupName;
+  g.owner = owner;
+  g.members.push_back(owner);
+  groups[groupName] = g;
+  saveGroups(groups);
 
-    Group g;
-    g.name = group_name;
-    g.owner = owner;
-    g.members.insert(owner);
+  // tạo thư mục nhóm (an toàn: defer logic sang server nơi có baseDir)
+  // -> phần này mình sẽ thực hiện trong Server.cpp sau khi createGroup trả true
 
-    groups[group_name] = std::move(g);
-    save_db();
-    return true;
+  return true;
 }
 
-bool GroupManager::request_join(const std::string& group_name,
-                                const std::string& username) {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
 
-    Group& g = it->second;
-    if (g.members.count(username))
-        return false;
-
-    g.pending_requests.insert(username);
-    save_db();
-    return true;
-}
-
-bool GroupManager::invite_user(const std::string& group_name,
-                               const std::string& owner,
-                               const std::string& username) {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
-
-    Group& g = it->second;
-    if (g.owner != owner)
-        return false;
-
-    g.invited_users.insert(username);
-    save_db();
-    return true;
-}
-
-bool GroupManager::approve_join_request(const std::string& group_name,
-                                        const std::string& owner,
-                                        const std::string& username) {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
-
-    Group& g = it->second;
-    if (g.owner != owner)
-        return false;
-
-    if (!g.pending_requests.erase(username))
-        return false;
-
-    g.members.insert(username);
-    save_db();
-    return true;
-}
-
-bool GroupManager::accept_invite(const std::string& group_name,
-                                 const std::string& username) {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
-
-    Group& g = it->second;
-    if (!g.invited_users.erase(username))
-        return false;
-
-    g.members.insert(username);
-    save_db();
-    return true;
-}
-
-bool GroupManager::leave_group(const std::string& group_name,
-                               const std::string& username) {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
-
-    Group& g = it->second;
-    if (g.owner == username)
-        return false;
-
-    bool ok = g.members.erase(username);
-    if (ok) save_db();
-    return ok;
-}
-
-bool GroupManager::remove_member(const std::string& group_name,
-                                 const std::string& owner,
-                                 const std::string& username) {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
-
-    Group& g = it->second;
-    if (g.owner != owner)
-        return false;
-
-    bool ok = g.members.erase(username);
-    if (ok) save_db();
-    return ok;
-}
-
-/* ===================== Query ===================== */
-
-std::vector<std::string> GroupManager::list_groups() const {
+std::vector<std::string> GroupManager::listGroups() {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
     std::vector<std::string> res;
-    for (const auto& [name, _] : groups)
+    for (auto& [name, _] : groups)
         res.push_back(name);
     return res;
 }
 
-std::vector<std::string>
-GroupManager::list_members(const std::string& group_name) const {
-    std::vector<std::string> res;
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return res;
+bool GroupManager::requestJoin(const std::string& groupName,
+                               const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
 
-    for (const auto& u : it->second.members)
-        res.push_back(u);
+    if (contains(g.members, username) ||
+        contains(g.pending_join, username))
+        return false;
+
+    g.pending_join.push_back(username);
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::approveJoin(const std::string& groupName,
+                               const std::string& owner,
+                               const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+
+    if (g.owner != owner) return false;
+    if (!contains(g.pending_join, username)) return false;
+
+    remove(g.pending_join, username);
+
+    if (!contains(g.members, username)) { 
+        g.members.push_back(username); 
+    }
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::inviteUser(const std::string& groupName,
+                              const std::string& owner,
+                              const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+
+    if (g.owner != owner) return false;
+    if (contains(g.members, username) ||
+        contains(g.pending_invite, username))
+        return false;
+
+    g.pending_invite.push_back(username);
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::acceptInvite(const std::string& groupName,
+                                const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+
+    if (!contains(g.pending_invite, username)) return false;
+
+    remove(g.pending_invite, username);
+    if (!contains(g.members, username)){
+        g.members.push_back(username);
+    }
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::leaveGroup(const std::string& groupName,
+                              const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+
+    if (username == g.owner) return false;
+    if (!contains(g.members, username)) return false;
+
+    remove(g.members, username);
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::kickMember(const std::string& groupName,
+                              const std::string& owner,
+                              const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+
+    if (g.owner != owner) return false;
+    if (!contains(g.members, username)) return false;
+
+    remove(g.members, username);
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::rejectJoin(const std::string& groupName,
+                              const std::string& owner,
+                              const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+    if (g.owner != owner) return false;
+    if (!contains(g.pending_join, username)) return false;
+    remove(g.pending_join, username);
+    saveGroups(groups);
+    return true;
+}
+
+bool GroupManager::rejectInvite(const std::string& groupName,
+                                const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    auto& g = groups[groupName];
+    if (!contains(g.pending_invite, username)) return false;
+    remove(g.pending_invite, username);
+    saveGroups(groups);
+    return true;
+}
+
+
+std::vector<std::string> GroupManager::listMembers(const std::string& groupName) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    return groups[groupName].members;
+}
+
+std::vector<std::string> GroupManager::listGroupsByUser(const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    std::vector<std::string> res;
+    for (auto& [name, g] : groups) {
+        if (contains(g.members, username)) {
+            res.push_back(name);
+        }
+    }
     return res;
 }
 
-bool GroupManager::is_member(const std::string& group_name,
-                             const std::string& username) const {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
-    return it->second.members.count(username);
+std::vector<std::string> GroupManager::listGroupsOwnedByUser(const std::string& username) {
+    std::lock_guard<std::mutex> lock(dbMutex);
+    auto groups = loadGroups();
+    std::vector<std::string> res;
+    for (auto& [name, g] : groups) {
+        if (g.owner == username) {
+            res.push_back(name);
+        }
+    }
+    return res;
 }
 
-bool GroupManager::is_owner(const std::string& group_name,
-                            const std::string& username) const {
-    auto it = groups.find(group_name);
-    if (it == groups.end())
-        return false;
-    return it->second.owner == username;
-}
